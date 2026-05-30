@@ -1,0 +1,26 @@
+"""
+app/database.py
+
+Database connection and session management.
+Provides async SQLAlchemy engine and session factory.
+Exposes get_db dependency for use in routers.
+
+Author: Suley Suarez
+Issue: #2
+"""
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from app.config import settings
+
+engine = create_async_engine(settings.DATABASE_URL, echo=True)
+
+AsyncSessionLocal = sessionmaker(
+    engine, class_=AsyncSession, expire_on_commit=False
+)
+
+class Base(DeclarativeBase):
+    pass
+
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        yield session
