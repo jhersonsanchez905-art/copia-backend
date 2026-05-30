@@ -1,0 +1,15 @@
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+sqlalchemy==2.0.30
+asyncpg==0.29.0
+alembic==1.13.1
+pydantic-settings==2.7.0
+pydantic==2.10.3
+clerk-backend-api==1.7.2
+resend==0.7.0
+gspread==6.1.0
+google-auth==2.29.0
+cloudinary==1.40.0
+pytest==8.2.0
+pytest-asyncio==0.23.6
+httpx==0.28.1
