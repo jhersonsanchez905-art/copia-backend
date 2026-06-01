@@ -26,3 +26,13 @@ from app.models.campanas import (
     CampanaCanal,
     CampanaProducto,
 )
+
+from app.models.producto import (
+    Producto,
+)
+
+from app.models.receta import (
+    RecetaVersion,
+    RecetaDetalle,
+    RecetaPaso,
+)
