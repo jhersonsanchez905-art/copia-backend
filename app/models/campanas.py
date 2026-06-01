@@ -67,7 +67,7 @@ class CampanaProducto(Base):
 
     id_campana_producto = Column(Integer, primary_key=True, index=True)
     id_campana = Column(Integer, ForeignKey("mkt.campana.id_campana"))
-    id_producto = Column(Integer, ForeignKey("pos.producto.id_producto"))
+    id_producto = Column(Integer, nullable=True)
     descuento_pct = Column(Numeric)
 
     campana = relationship("Campana", back_populates="productos")
