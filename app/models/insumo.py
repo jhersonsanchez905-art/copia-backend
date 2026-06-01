@@ -1,8 +1,6 @@
 """
 insumo.py
-
-Modelos de insumos y subrecetas del sistema POS.
-
+Modelos de insumos y subrecetas del sistema POS: insumos, subrecetas e ingredientes de subreceta.
 Autor: Ivan Ospino
 Issue: #19
 """
