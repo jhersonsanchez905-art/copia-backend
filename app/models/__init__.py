@@ -26,3 +26,28 @@ from app.models.campanas import (
     CampanaCanal,
     CampanaProducto,
 )
+
+from app.models.producto import (
+    Producto,
+)
+
+from app.models.receta import (
+    RecetaVersion,
+    RecetaDetalle,
+    RecetaPaso,
+)
+
+from app.models.insumo import (
+Insumo,
+Subreceta,
+SubrecetaIngrediente 
+) 
+
+from app.models.orden_compra import (
+EstadoOrdenCompra,
+OrdenCompra,
+OrdenCompraDetalle
+)
+
+
+
