@@ -2,7 +2,7 @@
 orden_compra.py
 Modelos de órdenes de compra de insumos: cabecera de orden y líneas de detalle por insumo.
 Autor: Ivan Ospino
-Issue: #19
+Issue: #20
 """
 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Numeric, Text, Date, Enum
