@@ -36,3 +36,10 @@ from app.models.receta import (
     RecetaDetalle,
     RecetaPaso,
 )
+
+
+
+from app.models.insumo import Insumo, Subreceta, SubrecetaIngrediente 
+from app.models.orden_compra import EstadoOrdenCompra, OrdenCompra, OrdenCompraDetalle  
+
+
