@@ -5,7 +5,16 @@ Autor: Ivan Ospino
 Issue: #19
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Numeric, Text
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Boolean,
+    Numeric,
+    DateTime,
+    ForeignKey,
+)
+
 from sqlalchemy.orm import relationship
 from app.database import Base
 import datetime
@@ -16,43 +25,107 @@ class Insumo(Base):
     __table_args__ = {"schema": "pos"}
 
     id_insumo = Column(Integer, primary_key=True, index=True)
-    nombre = Column(String, nullable=False)
-    descripcion = Column(String)
-    unidad_medida = Column(String, nullable=False)
-    stock_actual = Column(Numeric(12, 4), default=0)
-    umbral_minimo = Column(Numeric(12, 4), default=0)
-    costo_unitario = Column(Numeric(14, 4))
-    activo = Column(Boolean, default=True)
-    fecha_creacion = Column(DateTime, default=datetime.datetime.utcnow)
-    fecha_actualizacion = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
-    subreceta_ingredientes = relationship("SubrecetaIngrediente", back_populates="insumo")
+    nombre = Column(String, nullable=False, unique=True)
 
+    presentacion = Column(String)
 
-class Subreceta(Base):
-    __tablename__ = "subreceta"
-    __table_args__ = {"schema": "pos"}
+    id_unidad = Column(
+        Integer,
+        ForeignKey("pos.unidad_medida.id_unidad"),
+        nullable=False,
+    )
 
-    id_subreceta = Column(Integer, primary_key=True, index=True)
-    nombre = Column(String, nullable=False)
-    descripcion = Column(String)
-    rendimiento = Column(Numeric(12, 4), default=1)
-    unidad_rendimiento = Column(String, default="porcion")
-    activo = Column(Boolean, default=True)
-    fecha_creacion = Column(DateTime, default=datetime.datetime.utcnow)
-    fecha_actualizacion = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    contador_unidades = Column(Integer)
 
-    ingredientes = relationship("SubrecetaIngrediente", back_populates="subreceta")
+    precio = Column(Numeric(14, 4))
 
+    pct_rendimiento = Column(Numeric(5, 2))
 
-class SubrecetaIngrediente(Base):
-    __tablename__ = "subreceta_ingrediente"
-    __table_args__ = {"schema": "pos"}
+    precio_real = Column(Numeric(14, 4))
 
-    id_subreceta = Column(Integer, ForeignKey("pos.subreceta.id_subreceta"), primary_key=True)
-    id_insumo = Column(Integer, ForeignKey("pos.insumo.id_insumo"), primary_key=True)
-    cantidad = Column(Numeric(12, 4), nullable=False)
-    fecha_creacion = Column(DateTime, default=datetime.datetime.utcnow)
+    precio_por_udm = Column(Numeric(14, 4))
 
-    subreceta = relationship("Subreceta", back_populates="ingredientes")
-    insumo = relationship("Insumo", back_populates="subreceta_ingredientes")
+    id_clasificacion = Column(
+        Integer,
+        ForeignKey("pos.clasificacion.id_clasificacion"),
+        nullable=False,
+    )
+
+    id_proveedor = Column(
+        Integer,
+        ForeignKey("pos.proveedor.id_proveedor"),
+        nullable=False,
+    )
+
+    id_marca = Column(
+        Integer,
+        ForeignKey("pos.marca.id_marca"),
+        nullable=True,
+    )
+
+    stock_actual = Column(
+        Numeric(12, 4),
+        default=0,
+    )
+
+    umbral_minimo = Column(
+        Numeric(12, 4),
+        default=0,
+    )
+
+    activo = Column(
+        Boolean,
+        default=True,
+    )
+
+    fecha_creacion = Column(
+        DateTime,
+        default=datetime.datetime.utcnow,
+    )
+
+    fecha_actualizacion = Column(
+        DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )
+
+    unidad = relationship(
+        "UnidadMedida",
+        back_populates="insumos",
+    )
+
+    clasificacion = relationship(
+        "Clasificacion",
+        back_populates="insumos",
+    )
+
+    proveedor = relationship(
+        "Proveedor",
+        back_populates="insumos",
+    )
+
+    marca = relationship(
+        "Marca",
+        back_populates="insumos",
+    )
+
+    subreceta_ingredientes = relationship(
+        "SubrecetaIngrediente",
+        back_populates="insumo",
+    )
+
+    receta_detalles = relationship(
+        "RecetaDetalle",
+        back_populates="insumo",
+    )
+
+    movimientos = relationship(
+        "MovimientoInventario",
+        back_populates="insumo",
+    )
+
+    alertas = relationship(
+        "Alerta",
+        back_populates="insumo",
+    )
