@@ -49,5 +49,9 @@ OrdenCompra,
 OrdenCompraDetalle
 )
 
+from app.models.auditoria import (
+    Auditoria,
+)
+
 
 
