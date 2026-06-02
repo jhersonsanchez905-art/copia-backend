@@ -49,9 +49,34 @@ OrdenCompra,
 OrdenCompraDetalle
 )
 
+from app.models.venta import (
+    Venta,
+    ItemVenta,
+    Pago,
+    Factura,
+    Devolucion,
+)
+
+from app.models.caja import (
+    AperturaCaja,
+    CierreCaja,
+    CierreCajaDetalle,
+)
+
+from app.models.inventario import (
+    MovimientoInventario,
+    Alerta,
+)
+
 from app.models.auditoria import (
     Auditoria,
 )
+
+
+
+
+
+
 
 
 
