@@ -62,7 +62,7 @@ class MovimientoInventario(Base):
 
     id_orden_compra = Column(
         Integer,
-        ForeignKey("pos.orden_compra.id_orden_compra"),
+        ForeignKey("pos.orden_compra.id_orden"),
         nullable=True,
     )
 
@@ -103,10 +103,10 @@ class Alerta(Base):
     cantidad_a_pedir = Column(Numeric)
 
     id_orden_compra = Column(
-    Integer,
-    ForeignKey("pos.orden_compra.id_orden_compra"),
-    nullable=True,
-)
+        Integer,
+        ForeignKey("pos.orden_compra.id_orden"),
+        nullable=True,
+    )
 
     fecha_creacion = Column(
         DateTime,
