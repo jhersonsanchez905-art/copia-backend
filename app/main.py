@@ -1,22 +1,27 @@
 """
 app/main.py
-
 Application entry point.
 Initializes FastAPI, registers routers and exception handlers.
-
-Author: Suley Suarez
-Issue: #1
+Author: Suley Suarez/ Johan Valero
+Issue: #1, #40
 """
+
 from fastapi import FastAPI
 from app.exceptions import MajesaError, majesa_exception_handler
+from app.routers import producto, receta
 
 app = FastAPI(
     title="Majesa API",
     description="Sistema POS e Inventario — Cafeteria Majesa",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 app.add_exception_handler(MajesaError, majesa_exception_handler)
+
+# ── Routers ─────────────────────────────────────────────────
+app.include_router(producto.router, prefix="/api/v1")
+app.include_router(receta.router, prefix="/api/v1")
+
 
 @app.get("/health")
 def health():
