@@ -5,11 +5,11 @@ Application entry point.
 Initializes FastAPI, registers routers and exception handlers.
 
 Author: Suley Suarez
-Issue: #1
+Issue: #1, #40
 """
 from fastapi import FastAPI
 from app.exceptions import MajesaError, majesa_exception_handler
-from app.routers import insumo, orden_compra
+from app.routers import insumo, orden_compra, producto, receta
 
 app = FastAPI(
     title="Majesa API",
@@ -26,4 +26,5 @@ def health():
 
 app.include_router(insumo.router, prefix="/api/v1")
 app.include_router(orden_compra.router, prefix="/api/v1")
-
+app.include_router(producto.router, prefix="/api/v1")
+app.include_router(receta.router, prefix="/api/v1")
