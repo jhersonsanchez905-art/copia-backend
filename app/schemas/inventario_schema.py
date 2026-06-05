@@ -1,28 +1,19 @@
 """
-app/schemas/inventario_schema.py
-
-Pydantic schemas for inventory module request and response validation.
-
-Author: Suley Suarez
-Issue: #16
+inventario_schema.py
+Pydantic schemas for MovimientoInventario, Alerta, and read-only Auditoria queries.
+AjusteInventario has its own schema file (ajuste_inventario_schema.py).
 """
-from pydantic import BaseModel
-from typing import Optional, List
 from datetime import datetime
+from decimal import Decimal
 from enum import Enum
+from typing import Optional
+from pydantic import BaseModel, ConfigDict
 
 
 class TipoMovimientoEnum(str, Enum):
     entrada = "entrada"
     salida = "salida"
-    ajuste = "ajuste"
     merma = "merma"
-
-
-class EstadoAjusteEnum(str, Enum):
-    pendiente = "pendiente"
-    aprobado = "aprobado"
-    rechazado = "rechazado"
 
 
 class SemaforoEnum(str, Enum):
@@ -31,78 +22,46 @@ class SemaforoEnum(str, Enum):
     rojo = "rojo"
 
 
-# ── Ajuste Manual ─────────────────────────────────────────────────────────────
-
-class AjusteInventarioRequest(BaseModel):
-    """Request schema for a manual inventory adjustment."""
-    id_insumo: int
-    cantidad: float
-    motivo: str
-    observacion: Optional[str] = None
+class TipoAlertaEnum(str, Enum):
+    stock_bajo = "stock_bajo"
+    stock_critico = "stock_critico"
 
 
-class AjusteInventarioResponse(BaseModel):
-    """Manual inventory adjustment response."""
+class EstadoAlertaEnum(str, Enum):
+    activa = "activa"
+    resuelta = "resuelta"
+
+
+# ── MovimientoInventario ──────────────────────────────────────────────────────
+
+class MovimientoResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id_movimiento: int
     id_insumo: int
-    tipo: str
-    cantidad: float
-    motivo: str
+    tipo: TipoMovimientoEnum
+    cantidad: Decimal
+    cantidad_anterior: Decimal
+    cantidad_nueva: Decimal
+    motivo: Optional[str] = None
     observacion: Optional[str] = None
-    estado: str
-    cantidad_anterior: float
-    cantidad_nueva: float
+    id_venta: Optional[int] = None
+    id_orden_compra: Optional[int] = None
+    id_usuario: int
     fecha: datetime
-
-    class Config:
-        from_attributes = True
-
-
-# ── Aprobacion ────────────────────────────────────────────────────────────────
-
-class AprobacionAjusteRequest(BaseModel):
-    """Request schema to approve or reject a manual inventory adjustment."""
-    estado: EstadoAjusteEnum
-    observacion: Optional[str] = None
 
 
 # ── Alerta ────────────────────────────────────────────────────────────────────
 
 class AlertaResponse(BaseModel):
-    """Inventory alert response."""
+    model_config = ConfigDict(from_attributes=True)
+
     id_alerta: int
     id_insumo: int
-    estado: str
-    semaforo: str
-    cantidad_a_pedir: Optional[float] = None
+    tipo: TipoAlertaEnum
+    estado: EstadoAlertaEnum
+    semaforo: SemaforoEnum
+    cantidad_a_pedir: Optional[Decimal] = None
+    id_orden_compra: Optional[int] = None
     fecha_creacion: datetime
     fecha_resolucion: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
-
-
-class AlertaListResponse(BaseModel):
-    """List of active inventory alerts."""
-    total: int
-    items: List[AlertaResponse]
-
-
-# ── Movimiento ────────────────────────────────────────────────────────────────
-
-class MovimientoResponse(BaseModel):
-    """Inventory movement response."""
-    id_movimiento: int
-    id_insumo: int
-    tipo: str
-    cantidad: float
-    motivo: Optional[str] = None
-    observacion: Optional[str] = None
-    afecta_stock: bool
-    cantidad_anterior: float
-    cantidad_nueva: float
-    estado: str
-    fecha: datetime
-
-    class Config:
-        from_attributes = True
