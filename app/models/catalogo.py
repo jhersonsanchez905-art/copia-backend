@@ -38,8 +38,6 @@ class Usuario(Base):
     rol = relationship("Rol", back_populates="usuarios")
     ventas = relationship("Venta", back_populates="usuario", foreign_keys="Venta.id_usuario")
     ordenes_compra = relationship("OrdenCompra", back_populates="usuario")
-    pedidos = relationship("Pedido", back_populates="usuario")
-    reservas = relationship("Reserva", back_populates="usuario")
 
 
 class Cliente(Base):
@@ -58,7 +56,6 @@ class Cliente(Base):
     observaciones = Column(String)
 
     ventas = relationship("Venta", back_populates="cliente")
-    reservas = relationship("Reserva", back_populates="cliente")
 
 
 class Marca(Base):
@@ -67,8 +64,6 @@ class Marca(Base):
 
     id_marca = Column(Integer, primary_key=True, index=True)
     nombre = Column(String, nullable=False)
-
-    insumos = relationship("Insumo", back_populates="marca")
 
     insumos = relationship("Insumo", back_populates="marca")
 
@@ -83,8 +78,6 @@ class UnidadMedida(Base):
 
     insumos = relationship("Insumo", back_populates="unidad")
 
-    insumos = relationship("Insumo", back_populates="unidad")
-
 
 class Clasificacion(Base):
     __tablename__ = "clasificacion"
@@ -96,8 +89,6 @@ class Clasificacion(Base):
 
     insumos = relationship("Insumo", back_populates="clasificacion")
 
-    insumos = relationship("Insumo", back_populates="clasificacion")
-
 
 class Categoria(Base):
     __tablename__ = "categoria"
@@ -105,8 +96,6 @@ class Categoria(Base):
 
     id_categoria = Column(Integer, primary_key=True, index=True)
     nombre = Column(String, nullable=False)
-
-    productos = relationship("Producto", back_populates="categoria")
 
     productos = relationship("Producto", back_populates="categoria")
 
