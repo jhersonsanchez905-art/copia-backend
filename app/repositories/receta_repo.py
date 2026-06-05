@@ -1,31 +1,51 @@
 """
 receta_repo.py
-Capa de acceso a datos para RecetaVersion, RecetaDetalle y RecetaPaso.
-Author: SebastianValero12
-Issue: #40
+Async repository for RecetaVersion, RecetaDetalleInsumo,
+RecetaDetalleSubreceta, and RecetaPaso.
 """
-
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.receta import RecetaVersion, RecetaDetalle, RecetaPaso
+from app.models.receta import (
+    RecetaVersion,
+    RecetaDetalleInsumo,
+    RecetaDetalleSubreceta,
+    RecetaPaso,
+)
 
 
-# ── RecetaVersion ───────────────────────────────────────────
+# ── RecetaVersion ─────────────────────────────────────────────────────────────
 
 async def get_version_by_id(
     db: AsyncSession, version_id: int
 ) -> RecetaVersion | None:
-    query = (
+    result = await db.execute(
         select(RecetaVersion)
         .options(
-            selectinload(RecetaVersion.detalles),
+            selectinload(RecetaVersion.detalles_insumo),
+            selectinload(RecetaVersion.detalles_subreceta),
             selectinload(RecetaVersion.pasos),
         )
         .where(RecetaVersion.id_receta_version == version_id)
     )
-    result = await db.execute(query)
+    return result.scalar_one_or_none()
+
+
+async def get_vigente_by_producto(
+    db: AsyncSession, producto_id: int
+) -> RecetaVersion | None:
+    result = await db.execute(
+        select(RecetaVersion)
+        .options(
+            selectinload(RecetaVersion.detalles_insumo),
+            selectinload(RecetaVersion.detalles_subreceta),
+        )
+        .where(
+            RecetaVersion.id_producto == producto_id,
+            RecetaVersion.vigente.is_(True),
+        )
+    )
     return result.scalar_one_or_none()
 
 
@@ -38,7 +58,8 @@ async def get_versions_by_producto(
     query = (
         select(RecetaVersion)
         .options(
-            selectinload(RecetaVersion.detalles),
+            selectinload(RecetaVersion.detalles_insumo),
+            selectinload(RecetaVersion.detalles_subreceta),
             selectinload(RecetaVersion.pasos),
         )
         .where(RecetaVersion.id_producto == producto_id)
@@ -50,34 +71,27 @@ async def get_versions_by_producto(
     return list(result.scalars().all())
 
 
-async def get_next_version_number(
-    db: AsyncSession, producto_id: int
-) -> int:
-    query = select(func.coalesce(func.max(RecetaVersion.version), 0)).where(
-        RecetaVersion.id_producto == producto_id
+async def get_next_version_number(db: AsyncSession, producto_id: int) -> int:
+    result = await db.execute(
+        select(func.coalesce(func.max(RecetaVersion.version), 0)).where(
+            RecetaVersion.id_producto == producto_id
+        )
     )
-    result = await db.execute(query)
     return result.scalar_one() + 1
 
 
-async def deactivate_current_versions(
-    db: AsyncSession, producto_id: int
-) -> None:
-    """Marca como no vigente todas las versiones activas de un producto."""
-    query = (
+async def deactivate_current_versions(db: AsyncSession, producto_id: int) -> None:
+    result = await db.execute(
         select(RecetaVersion)
         .where(RecetaVersion.id_producto == producto_id)
         .where(RecetaVersion.vigente.is_(True))
     )
-    result = await db.execute(query)
     for version in result.scalars().all():
         version.vigente = False
     await db.flush()
 
 
-async def create_version(
-    db: AsyncSession, version: RecetaVersion
-) -> RecetaVersion:
+async def create_version(db: AsyncSession, version: RecetaVersion) -> RecetaVersion:
     db.add(version)
     await db.flush()
     await db.refresh(version)
@@ -94,26 +108,26 @@ async def update_version(
     return version
 
 
-# ── RecetaDetalle ───────────────────────────────────────────
+# ── RecetaDetalleInsumo ───────────────────────────────────────────────────────
 
-async def get_detalle_by_id(
+async def get_detalle_insumo_by_id(
     db: AsyncSession, detalle_id: int
-) -> RecetaDetalle | None:
-    return await db.get(RecetaDetalle, detalle_id)
+) -> RecetaDetalleInsumo | None:
+    return await db.get(RecetaDetalleInsumo, detalle_id)
 
 
-async def create_detalle(
-    db: AsyncSession, detalle: RecetaDetalle
-) -> RecetaDetalle:
+async def create_detalle_insumo(
+    db: AsyncSession, detalle: RecetaDetalleInsumo
+) -> RecetaDetalleInsumo:
     db.add(detalle)
     await db.flush()
     await db.refresh(detalle)
     return detalle
 
 
-async def update_detalle(
-    db: AsyncSession, detalle: RecetaDetalle, data: dict
-) -> RecetaDetalle:
+async def update_detalle_insumo(
+    db: AsyncSession, detalle: RecetaDetalleInsumo, data: dict
+) -> RecetaDetalleInsumo:
     for key, value in data.items():
         setattr(detalle, key, value)
     await db.flush()
@@ -121,16 +135,50 @@ async def update_detalle(
     return detalle
 
 
-async def delete_detalle(db: AsyncSession, detalle: RecetaDetalle) -> None:
+async def delete_detalle_insumo(
+    db: AsyncSession, detalle: RecetaDetalleInsumo
+) -> None:
     await db.delete(detalle)
     await db.flush()
 
 
-# ── RecetaPaso ──────────────────────────────────────────────
+# ── RecetaDetalleSubreceta ────────────────────────────────────────────────────
 
-async def get_paso_by_id(
-    db: AsyncSession, paso_id: int
-) -> RecetaPaso | None:
+async def get_detalle_subreceta_by_id(
+    db: AsyncSession, detalle_id: int
+) -> RecetaDetalleSubreceta | None:
+    return await db.get(RecetaDetalleSubreceta, detalle_id)
+
+
+async def create_detalle_subreceta(
+    db: AsyncSession, detalle: RecetaDetalleSubreceta
+) -> RecetaDetalleSubreceta:
+    db.add(detalle)
+    await db.flush()
+    await db.refresh(detalle)
+    return detalle
+
+
+async def update_detalle_subreceta(
+    db: AsyncSession, detalle: RecetaDetalleSubreceta, data: dict
+) -> RecetaDetalleSubreceta:
+    for key, value in data.items():
+        setattr(detalle, key, value)
+    await db.flush()
+    await db.refresh(detalle)
+    return detalle
+
+
+async def delete_detalle_subreceta(
+    db: AsyncSession, detalle: RecetaDetalleSubreceta
+) -> None:
+    await db.delete(detalle)
+    await db.flush()
+
+
+# ── RecetaPaso ────────────────────────────────────────────────────────────────
+
+async def get_paso_by_id(db: AsyncSession, paso_id: int) -> RecetaPaso | None:
     return await db.get(RecetaPaso, paso_id)
 
 

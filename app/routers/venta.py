@@ -21,7 +21,6 @@ from app.services import venta_service
 from app.schemas.venta_schema import (
     VentaCreateRequest,
     VentaResponse,
-    VentaListResponse
 )
 
 router = APIRouter()

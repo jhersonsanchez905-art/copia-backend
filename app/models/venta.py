@@ -36,7 +36,7 @@ class Venta(Base):
     estado = Column(String(20), nullable=False, default="abierta")
 
     # --- relaciones ---
-    apertura = relationship("AperturaCaja")
+    apertura = relationship("AperturaCaja", back_populates="ventas")
     pedido = relationship("Pedido", back_populates="venta")
     usuario = relationship("Usuario", back_populates="ventas")
     cliente = relationship("Cliente", back_populates="ventas")
