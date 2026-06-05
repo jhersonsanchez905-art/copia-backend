@@ -22,6 +22,7 @@ class Proveedor(Base):
     activo = Column(Boolean, default=True)
 
     insumos = relationship("InsumoProveedor", back_populates="proveedor")
+    ordenes_compra = relationship("OrdenCompra", back_populates="proveedor")
 
 
 class InsumoProveedor(Base):
@@ -36,3 +37,4 @@ class InsumoProveedor(Base):
     dias_entrega = Column(Integer)
 
     proveedor = relationship("Proveedor", back_populates="insumos")
+    insumo = relationship("Insumo", back_populates="proveedores")

@@ -1,32 +1,24 @@
 """
 app/models/auditoria.py
-
 Audit log model for traceability of all system actions.
-
 Author: Suley Suarez
 """
-from sqlalchemy import JSON, Column, Integer, String, Boolean, DateTime, ForeignKey, Text
-from sqlalchemy.orm import relationship
-from datetime import datetime
-from app.database import Base
-
-
 import datetime
- 
+
 from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
- 
+
 from app.database import Base
- 
- 
+
+
 def _now():
     return datetime.datetime.now(datetime.timezone.utc)
- 
- 
+
+
 class Auditoria(Base):
     __tablename__ = "auditoria"
     __table_args__ = {"schema": "pos"}
- 
+
     id_auditoria = Column(Integer, primary_key=True, index=True)
     id_usuario = Column(Integer, ForeignKey("pos.usuario.id_usuario"), nullable=True)
     entidad = Column(String(60), nullable=False)
@@ -40,5 +32,5 @@ class Auditoria(Base):
     ip = Column(String(45))
     user_agent = Column(String(255))
     fecha = Column(DateTime(timezone=True), default=_now, nullable=False)
- 
+
     usuario = relationship("Usuario")
