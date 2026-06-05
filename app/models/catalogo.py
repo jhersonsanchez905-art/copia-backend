@@ -70,6 +70,8 @@ class Marca(Base):
 
     insumos = relationship("Insumo", back_populates="marca")
 
+    insumos = relationship("Insumo", back_populates="marca")
+
 
 class UnidadMedida(Base):
     __tablename__ = "unidad_medida"
@@ -78,6 +80,8 @@ class UnidadMedida(Base):
     id_unidad = Column(Integer, primary_key=True, index=True)
     nombre = Column(String, nullable=False)
     abreviatura = Column(String, nullable=False)
+
+    insumos = relationship("Insumo", back_populates="unidad")
 
     insumos = relationship("Insumo", back_populates="unidad")
 
@@ -92,6 +96,8 @@ class Clasificacion(Base):
 
     insumos = relationship("Insumo", back_populates="clasificacion")
 
+    insumos = relationship("Insumo", back_populates="clasificacion")
+
 
 class Categoria(Base):
     __tablename__ = "categoria"
@@ -99,6 +105,8 @@ class Categoria(Base):
 
     id_categoria = Column(Integer, primary_key=True, index=True)
     nombre = Column(String, nullable=False)
+
+    productos = relationship("Producto", back_populates="categoria")
 
     productos = relationship("Producto", back_populates="categoria")
 
