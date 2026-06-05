@@ -1,10 +1,8 @@
 """
 receta.py (router)
-Endpoints CRUD para RecetaVersion, RecetaDetalle y RecetaPaso.
-Autor SebastianValero12
-Issue: #40
+CRUD endpoints for RecetaVersion, RecetaDetalleInsumo,
+RecetaDetalleSubreceta, and RecetaPaso.
 """
-
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,9 +11,12 @@ from app.schemas.receta_schema import (
     RecetaVersionCreate,
     RecetaVersionUpdate,
     RecetaVersionResponse,
-    RecetaDetalleCreate,
-    RecetaDetalleUpdate,
-    RecetaDetalleResponse,
+    RecetaDetalleInsumoCreate,
+    RecetaDetalleInsumoUpdate,
+    RecetaDetalleInsumoResponse,
+    RecetaDetalleSubrecetaCreate,
+    RecetaDetalleSubrecetaUpdate,
+    RecetaDetalleSubrecetaResponse,
     RecetaPasoCreate,
     RecetaPasoUpdate,
     RecetaPasoResponse,
@@ -25,7 +26,7 @@ from app.services import receta_service
 router = APIRouter(prefix="/recetas", tags=["Recetas"])
 
 
-# ── RecetaVersion ───────────────────────────────────────────
+# ── RecetaVersion ─────────────────────────────────────────────────────────────
 
 @router.get(
     "/producto/{producto_id}",
@@ -37,19 +38,15 @@ async def listar_versiones(
     solo_vigente: bool = Query(False),
     db: AsyncSession = Depends(get_db),
 ):
-    return await receta_service.listar_versiones(
-        db, producto_id, solo_vigente=solo_vigente
-    )
+    return await receta_service.listar_versiones(db, producto_id, solo_vigente=solo_vigente)
 
 
 @router.get(
     "/{version_id}",
     response_model=RecetaVersionResponse,
-    summary="Obtener versión de receta por ID (incluye detalles y pasos)",
+    summary="Obtener versión de receta por ID",
 )
-async def obtener_version(
-    version_id: int, db: AsyncSession = Depends(get_db)
-):
+async def obtener_version(version_id: int, db: AsyncSession = Depends(get_db)):
     return await receta_service.obtener_version(db, version_id)
 
 
@@ -57,12 +54,7 @@ async def obtener_version(
     "",
     response_model=RecetaVersionResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Crear nueva versión de receta",
-    description=(
-        "Crea una nueva versión para el producto indicado. "
-        "Desactiva automáticamente las versiones anteriores. "
-        "Acepta detalles (ingredientes) y pasos en cascada."
-    ),
+    summary="Crear nueva versión de receta (desactiva versiones anteriores)",
 )
 async def crear_version(
     payload: RecetaVersionCreate, db: AsyncSession = Depends(get_db)
@@ -83,47 +75,87 @@ async def actualizar_version(
     return await receta_service.actualizar_version(db, version_id, payload)
 
 
-# ── RecetaDetalle ───────────────────────────────────────────
+# ── RecetaDetalleInsumo ───────────────────────────────────────────────────────
 
 @router.post(
-    "/{version_id}/detalles",
-    response_model=RecetaDetalleResponse,
+    "/{version_id}/detalles/insumo",
+    response_model=RecetaDetalleInsumoResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Agregar ingrediente a una versión de receta",
+    summary="Agregar detalle de insumo a una versión de receta",
 )
-async def agregar_detalle(
+async def agregar_detalle_insumo(
     version_id: int,
-    payload: RecetaDetalleCreate,
+    payload: RecetaDetalleInsumoCreate,
     db: AsyncSession = Depends(get_db),
 ):
-    return await receta_service.agregar_detalle(db, version_id, payload)
+    return await receta_service.agregar_detalle_insumo(db, version_id, payload)
 
 
 @router.patch(
-    "/detalles/{detalle_id}",
-    response_model=RecetaDetalleResponse,
-    summary="Actualizar ingrediente de receta",
+    "/detalles/insumo/{detalle_id}",
+    response_model=RecetaDetalleInsumoResponse,
+    summary="Actualizar detalle de insumo",
 )
-async def actualizar_detalle(
+async def actualizar_detalle_insumo(
     detalle_id: int,
-    payload: RecetaDetalleUpdate,
+    payload: RecetaDetalleInsumoUpdate,
     db: AsyncSession = Depends(get_db),
 ):
-    return await receta_service.actualizar_detalle(db, detalle_id, payload)
+    return await receta_service.actualizar_detalle_insumo(db, detalle_id, payload)
 
 
 @router.delete(
-    "/detalles/{detalle_id}",
+    "/detalles/insumo/{detalle_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Eliminar ingrediente de receta",
+    summary="Eliminar detalle de insumo",
 )
-async def eliminar_detalle(
+async def eliminar_detalle_insumo(
     detalle_id: int, db: AsyncSession = Depends(get_db)
 ):
-    await receta_service.eliminar_detalle(db, detalle_id)
+    await receta_service.eliminar_detalle_insumo(db, detalle_id)
 
 
-# ── RecetaPaso ──────────────────────────────────────────────
+# ── RecetaDetalleSubreceta ────────────────────────────────────────────────────
+
+@router.post(
+    "/{version_id}/detalles/subreceta",
+    response_model=RecetaDetalleSubrecetaResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Agregar detalle de subreceta a una versión de receta",
+)
+async def agregar_detalle_subreceta(
+    version_id: int,
+    payload: RecetaDetalleSubrecetaCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    return await receta_service.agregar_detalle_subreceta(db, version_id, payload)
+
+
+@router.patch(
+    "/detalles/subreceta/{detalle_id}",
+    response_model=RecetaDetalleSubrecetaResponse,
+    summary="Actualizar detalle de subreceta",
+)
+async def actualizar_detalle_subreceta(
+    detalle_id: int,
+    payload: RecetaDetalleSubrecetaUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    return await receta_service.actualizar_detalle_subreceta(db, detalle_id, payload)
+
+
+@router.delete(
+    "/detalles/subreceta/{detalle_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Eliminar detalle de subreceta",
+)
+async def eliminar_detalle_subreceta(
+    detalle_id: int, db: AsyncSession = Depends(get_db)
+):
+    await receta_service.eliminar_detalle_subreceta(db, detalle_id)
+
+
+# ── RecetaPaso ────────────────────────────────────────────────────────────────
 
 @router.post(
     "/{version_id}/pasos",
@@ -157,7 +189,5 @@ async def actualizar_paso(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Eliminar paso de receta",
 )
-async def eliminar_paso(
-    paso_id: int, db: AsyncSession = Depends(get_db)
-):
+async def eliminar_paso(paso_id: int, db: AsyncSession = Depends(get_db)):
     await receta_service.eliminar_paso(db, paso_id)
