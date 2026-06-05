@@ -1,112 +1,216 @@
 """
-app/services/venta_service.py
+venta_service.py
+Async business logic for Venta registration with atomic inventory deduction.
 
-Business logic for sales module.
-Handles atomic sale registration, inventory deduction and invoice generation.
-
-Author: Suley Suarez
-Issue: #16
+Flow for registrar_venta:
+1. Resolve active RecetaVersion for each product.
+2. Aggregate insumo quantities across all items (Insumo + Subreceta ingredients).
+3. Verify ALL stocks before touching anything.
+4. Create Venta + ItemVenta records with receta_snapshot.
+5. Deduct stock for each insumo, create MovimientoInventario, evaluate semaforo.
+6. Create Pago and Factura records.
+7. Mark Pedido as 'pagado', mark Mesa as 'disponible'.
+8. Commit atomically — any failure rolls back.
 """
+import datetime
+from decimal import Decimal
+from typing import Any
+
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime, date
-from typing import Optional
-from app.schemas.venta_schema import VentaCreateRequest, VentaResponse
-from app.repositories import venta_repo, inventario_repo
-from app.models.venta import Venta, ItemVenta, Pago, Factura
-from app.exceptions import InsumoInsuficienteError, VentaNoEncontradaError
+from sqlalchemy.orm import selectinload
+
+from app.exceptions import InsumoInsuficienteError, MajesaError, VentaNoEncontradaError
+from app.models.insumo import Subreceta
+from app.models.pedido import Pedido
+from app.models.venta import Factura, ItemVenta, Pago, Venta
+from app.repositories import producto_repo, receta_repo, stock_repo, venta_repo
+from app.schemas.venta_schema import VentaCreateRequest
+from app.services import inventario_service
+
+
+def _now() -> datetime.datetime:
+    return datetime.datetime.now(datetime.timezone.utc)
+
+
+async def _get_subreceta_with_ingredients(
+    db: AsyncSession, id_subreceta: int
+) -> Subreceta | None:
+    result = await db.execute(
+        select(Subreceta)
+        .options(selectinload(Subreceta.ingredientes))
+        .where(Subreceta.id_subreceta == id_subreceta)
+    )
+    return result.scalar_one_or_none()
+
+
+def _build_snapshot(version) -> dict[str, Any]:
+    return {
+        "id_receta_version": version.id_receta_version,
+        "version": version.version,
+        "detalles_insumo": [
+            {
+                "id_receta_detalle_insumo": d.id_receta_detalle_insumo,
+                "id_insumo": d.id_insumo,
+                "cantidad": str(d.cantidad),
+                "id_unidad": d.id_unidad,
+            }
+            for d in version.detalles_insumo
+        ],
+        "detalles_subreceta": [
+            {
+                "id_receta_detalle_subreceta": d.id_receta_detalle_subreceta,
+                "id_subreceta": d.id_subreceta,
+                "cantidad": str(d.cantidad),
+                "id_unidad": d.id_unidad,
+            }
+            for d in version.detalles_subreceta
+        ],
+    }
 
 
 async def registrar_venta(
     data: VentaCreateRequest,
     id_usuario: int,
-    db: AsyncSession
+    db: AsyncSession,
 ) -> Venta:
     """
-    Register a new sale with atomic inventory deduction.
-
-    Steps:
-    1. Retrieve active recipe for each product.
-    2. Calculate required ingredients.
-    3. Verify stock for ALL ingredients before deducting.
-    4. Create sale with recipe snapshot.
-    5. Deduct stock atomically.
-    6. Generate invoice.
-
-    Raises:
-        InsumoInsuficienteError: If any ingredient has insufficient stock.
+    Registers a sale with full atomic inventory deduction.
+    Raises InsumoInsuficienteError if any ingredient has insufficient stock.
+    Raises MajesaError(404) if product has no active recipe.
+    All DB operations committed in one transaction; any error rolls back.
     """
-    async with db.begin():
-        subtotal = 0.0
-        items_creados = []
+    try:
+        # ── Step 1 & 2: resolve recipes and aggregate insumo requirements ────
+        # {id_insumo: Decimal total_needed}
+        requerimientos: dict[int, Decimal] = {}
+        # Per item: (version, snapshot, precio_unitario, cantidad)
+        items_info = []
 
-        for item_data in data.productos:
-            # TODO: get product price and active recipe from repo
-            # receta = await receta_repo.get_vigente(item_data.id_producto, db)
-            # insumos = calcular_insumos(receta, item_data.cantidad)
-            # await verificar_stock(insumos, db)
-            # snapshot = receta.to_snapshot()
+        for item_req in data.productos:
+            version = await receta_repo.get_vigente_by_producto(db, item_req.id_producto)
+            if not version:
+                raise MajesaError(
+                    f"Producto {item_req.id_producto} no tiene receta vigente", 422
+                )
 
-            precio_unitario = 0.0  # placeholder — reemplazar con precio real
-            item_subtotal = precio_unitario * item_data.cantidad
-            subtotal += item_subtotal
+            # Direct insumos
+            for detalle in version.detalles_insumo:
+                needed = detalle.cantidad * item_req.cantidad
+                requerimientos[detalle.id_insumo] = (
+                    requerimientos.get(detalle.id_insumo, Decimal("0")) + needed
+                )
 
-            item = ItemVenta(
-                id_venta=None,
-                id_producto=item_data.id_producto,
-                cantidad=item_data.cantidad,
-                precio_unitario=precio_unitario,
-                subtotal=item_subtotal,
-                receta_snapshot={}  # placeholder — reemplazar con snapshot real
-            )
-            items_creados.append(item)
+            # Subreceta ingredients
+            for det_sub in version.detalles_subreceta:
+                subreceta = await _get_subreceta_with_ingredients(db, det_sub.id_subreceta)
+                if not subreceta:
+                    continue
+                porciones = Decimal(subreceta.porciones or 1)
+                for ing in subreceta.ingredientes:
+                    needed = det_sub.cantidad * item_req.cantidad * ing.cantidad / porciones
+                    requerimientos[ing.id_insumo] = (
+                        requerimientos.get(ing.id_insumo, Decimal("0")) + needed
+                    )
 
-        total = sum(p.monto for p in data.pagos)
+            # Get product price from Producto model
+            producto = await producto_repo.get_by_id(db, item_req.id_producto)
+            precio_unitario = producto.precio if producto else Decimal("0")
+            snapshot = _build_snapshot(version)
+            items_info.append((version, snapshot, precio_unitario, item_req.cantidad))
+
+        # ── Step 3: verify all stocks before touching anything ───────────────
+        for id_insumo, cantidad_requerida in requerimientos.items():
+            stock = await stock_repo.get_stock_by_insumo(db, id_insumo)
+            if stock is None or stock.cantidad < cantidad_requerida:
+                disponible = stock.cantidad if stock else Decimal("0")
+                raise InsumoInsuficienteError(
+                    f"Stock insuficiente para insumo {id_insumo}: "
+                    f"disponible={disponible}, requerido={cantidad_requerida}"
+                )
+
+        # ── Step 4: create Venta ─────────────────────────────────────────────
+        subtotal = sum(precio * qty for _, _, precio, qty in items_info)
+        total_pagado = sum(p.monto for p in data.pagos)
 
         venta = Venta(
             id_apertura=data.id_apertura,
-            turno=data.turno,
-            fecha=datetime.utcnow(),
+            id_pedido=data.id_pedido,
             id_usuario=id_usuario,
             id_cliente=data.id_cliente,
+            turno=data.turno,
+            fecha=_now(),
             subtotal=subtotal,
-            total=total,
-            estado="cerrada"
+            total=total_pagado,
+            estado="completada",
         )
-
         venta = await venta_repo.create_venta(venta, db)
 
-        for item in items_creados:
-            item.id_venta = venta.id_venta
+        # ── Step 4b: create ItemVenta records ────────────────────────────────
+        for version, snapshot, precio_unitario, cantidad in items_info:
+            item = ItemVenta(
+                id_venta=venta.id_venta,
+                id_producto=version.id_producto,
+                id_receta_version=version.id_receta_version,
+                receta_snapshot=snapshot,
+                cantidad=cantidad,
+                precio_unitario=precio_unitario,
+                subtotal=precio_unitario * cantidad,
+            )
             await venta_repo.create_item_venta(item, db)
 
+        # ── Step 5: deduct stock, create movements, evaluate semaforo ────────
+        for id_insumo, cantidad_requerida in requerimientos.items():
+            await inventario_service.descontar_stock(
+                db,
+                id_insumo=id_insumo,
+                cantidad=cantidad_requerida,
+                id_usuario=id_usuario,
+                id_venta=venta.id_venta,
+                motivo="salida por venta",
+            )
+
+        # ── Step 6: create Pago and Factura ───────────────────────────────────
         for pago_data in data.pagos:
             pago = Pago(
                 id_venta=venta.id_venta,
                 id_metodo_pago=pago_data.id_metodo_pago,
                 monto=pago_data.monto,
                 url_comprobante=pago_data.url_comprobante,
-                estado_validacion="validado"
+                estado_validacion="pendiente",
             )
             await venta_repo.create_pago(pago, db)
 
         factura = Factura(
             id_venta=venta.id_venta,
             numero=f"FAC-{venta.id_venta:06d}",
-            fecha_emision=datetime.utcnow(),
-            total=total
+            fecha_emision=_now(),
+            total=total_pagado,
         )
         await venta_repo.create_factura(factura, db)
 
-        return venta
+        # ── Step 7: update Pedido estado → pagado; Mesa → disponible ─────────
+        pedido_result = await db.execute(
+            select(Pedido)
+            .options(selectinload(Pedido.mesa))
+            .where(Pedido.id_pedido == data.id_pedido)
+        )
+        pedido = pedido_result.scalar_one_or_none()
+        if pedido:
+            pedido.estado = "pagado"
+            if pedido.mesa:
+                pedido.mesa.estado = "disponible"
+
+        await db.commit()
+
+        return await venta_repo.get_venta_by_id(venta.id_venta, db)
+
+    except Exception:
+        await db.rollback()
+        raise
 
 
 async def get_venta_by_id(id_venta: int, db: AsyncSession) -> Venta:
-    """
-    Retrieve a sale by its ID.
-
-    Raises:
-        VentaNoEncontradaError: If the sale does not exist.
-    """
     venta = await venta_repo.get_venta_by_id(id_venta, db)
     if not venta:
         raise VentaNoEncontradaError(id_venta)
@@ -114,9 +218,8 @@ async def get_venta_by_id(id_venta: int, db: AsyncSession) -> Venta:
 
 
 async def get_ventas_by_fecha_turno(
-    fecha: date,
-    turno: Optional[str],
-    db: AsyncSession
+    fecha,
+    turno: str | None,
+    db: AsyncSession,
 ) -> list[Venta]:
-    """Retrieve all sales for a given date and optional shift."""
     return await venta_repo.get_ventas_by_fecha_turno(fecha, turno, db)

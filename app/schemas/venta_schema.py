@@ -1,15 +1,12 @@
 """
-app/schemas/venta_schema.py
-
+venta_schema.py
 Pydantic schemas for sales module request and response validation.
-
-Author: Suley Suarez
-Issue: #16
 """
-from pydantic import BaseModel
-from typing import Optional, List
 from datetime import datetime
+from decimal import Decimal
 from enum import Enum
+from typing import Any, Optional
+from pydantic import BaseModel, ConfigDict
 
 
 class TurnoEnum(str, Enum):
@@ -19,107 +16,70 @@ class TurnoEnum(str, Enum):
 
 class EstadoVentaEnum(str, Enum):
     abierta = "abierta"
-    cerrada = "cerrada"
+    completada = "completada"
     anulada = "anulada"
 
 
-# ── Item Venta ────────────────────────────────────────────────────────────────
+class EstadoValidacionEnum(str, Enum):
+    pendiente = "pendiente"
+    aprobado = "aprobado"
+    rechazado = "rechazado"
+
+
+# ── ItemVenta ─────────────────────────────────────────────────────────────────
 
 class ItemVentaRequest(BaseModel):
-    """Single product item in a sale request."""
     id_producto: int
+    cantidad: int = 1
+
+
+class ItemVentaResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id_item_venta: int
+    id_venta: int
+    id_producto: int
+    id_receta_version: int
     cantidad: int
+    precio_unitario: Decimal
+    subtotal: Decimal
+    receta_snapshot: Optional[Any] = None
 
 
-# ── Pago ─────────────────────────────────────────────────────────────────────
+# ── Pago ──────────────────────────────────────────────────────────────────────
 
 class PagoRequest(BaseModel):
-    """Payment method detail in a sale request."""
     id_metodo_pago: int
-    monto: float
+    monto: Decimal
     url_comprobante: Optional[str] = None
 
 
 class PagoResponse(BaseModel):
-    """Payment method detail in a sale response."""
+    model_config = ConfigDict(from_attributes=True)
+
     id_pago: int
+    id_venta: int
     id_metodo_pago: int
-    monto: float
+    monto: Decimal
     url_comprobante: Optional[str] = None
-    estado_validacion: Optional[str] = None
-
-    class Config:
-        from_attributes = True
+    estado_validacion: EstadoValidacionEnum
 
 
-# ── Venta ─────────────────────────────────────────────────────────────────────
-
-class VentaCreateRequest(BaseModel):
-    """
-    Request schema to register a new sale.
-    A single sale can have multiple products and multiple payment methods.
-    """
-    turno: TurnoEnum
-    id_apertura: int
-    id_cliente: Optional[int] = None
-    productos: List[ItemVentaRequest]
-    pagos: List[PagoRequest]
-
-
-class ItemVentaResponse(BaseModel):
-    """Single product item in a sale response."""
-    id_item_venta: int
-    id_producto: int
-    id_receta_version: Optional[int] = None
-    cantidad: int
-    precio_unitario: float
-    subtotal: float
-    receta_snapshot: Optional[dict] = None
-
-    class Config:
-        from_attributes = True
-
+# ── Factura ───────────────────────────────────────────────────────────────────
 
 class FacturaResponse(BaseModel):
-    """Invoice associated to a sale."""
+    model_config = ConfigDict(from_attributes=True)
+
     id_factura: int
     numero: str
     fecha_emision: datetime
-    total: float
+    total: Decimal
     url_pdf: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
-
-class VentaResponse(BaseModel):
-    """Full sale response including items, payments and invoice."""
-    id_venta: int
-    turno: str
-    fecha: datetime
-    id_usuario: int
-    id_cliente: Optional[int] = None
-    subtotal: float
-    total: float
-    estado: str
-    items: List[ItemVentaResponse] = []
-    pagos: List[PagoResponse] = []
-    factura: Optional[FacturaResponse] = None
-
-    class Config:
-        from_attributes = True
-
-
-class VentaListResponse(BaseModel):
-    """Paginated list of sales."""
-    total: int
-    items: List[VentaResponse]
 
 
 # ── Devolucion ────────────────────────────────────────────────────────────────
 
 class DevolucionCreateRequest(BaseModel):
-    """Request schema to register a return."""
     id_item_venta: int
     motivo: str
     observacion: Optional[str] = None
@@ -127,14 +87,41 @@ class DevolucionCreateRequest(BaseModel):
 
 
 class DevolucionResponse(BaseModel):
-    """Return response."""
+    model_config = ConfigDict(from_attributes=True)
+
     id_devolucion: int
     id_venta: int
     id_item_venta: int
     fecha: datetime
     motivo: str
     estado: str
-    reintegra_stock: bool
+    reintegra_stock: int
 
-    class Config:
-        from_attributes = True
+
+# ── Venta ──────────────────────────────────────────────────────────────────────
+
+class VentaCreateRequest(BaseModel):
+    turno: TurnoEnum
+    id_apertura: int
+    id_pedido: int
+    id_cliente: Optional[int] = None
+    productos: list[ItemVentaRequest]
+    pagos: list[PagoRequest]
+
+
+class VentaResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id_venta: int
+    id_apertura: int
+    id_pedido: int
+    id_usuario: int
+    id_cliente: Optional[int] = None
+    turno: str
+    fecha: datetime
+    subtotal: Decimal
+    total: Decimal
+    estado: EstadoVentaEnum
+    items: list[ItemVentaResponse] = []
+    pagos: list[PagoResponse] = []
+    factura: Optional[FacturaResponse] = None

@@ -1,129 +1,154 @@
 """
 insumo_repo.py
-Repositorio de acceso a datos para insumos, subrecetas e ingredientes de subreceta.
-Autor: Ivan Ospino
-Issue: #19
+Async repository for Insumo, Subreceta, and SubrecetaIngrediente.
+Uses SQLAlchemy 2.x select() syntax with AsyncSession.
 """
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from sqlalchemy.orm import Session
 from app.models.insumo import Insumo, Subreceta, SubrecetaIngrediente
-from app.schemas.insumo_schema import InsumoCreate, InsumoUpdate, SubrecetaCreate, SubrecetaUpdate, SubrecetaIngredienteCreate, SubrecetaIngredienteUpdate
 
 
 # ── Insumo ────────────────────────────────────────────────────────────────────
 
-def get_insumo(db: Session, id_insumo: int):
-    return db.query(Insumo).filter(Insumo.id_insumo == id_insumo).first()
+async def get_insumo_by_id(db: AsyncSession, id_insumo: int) -> Insumo | None:
+    return await db.get(Insumo, id_insumo)
 
 
-def get_insumos(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(Insumo).offset(skip).limit(limit).all()
+async def get_insumos(
+    db: AsyncSession,
+    *,
+    solo_activos: bool = False,
+    skip: int = 0,
+    limit: int = 100,
+) -> list[Insumo]:
+    query = select(Insumo)
+    if solo_activos:
+        query = query.where(Insumo.activo.is_(True))
+    query = query.offset(skip).limit(limit)
+    result = await db.execute(query)
+    return list(result.scalars().all())
 
 
-def create_insumo(db: Session, data: InsumoCreate):
-    insumo = Insumo(**data.model_dump())
+async def create_insumo(db: AsyncSession, insumo: Insumo) -> Insumo:
     db.add(insumo)
-    db.commit()
-    db.refresh(insumo)
+    await db.flush()
+    await db.refresh(insumo)
     return insumo
 
 
-def update_insumo(db: Session, id_insumo: int, data: InsumoUpdate):
-    insumo = get_insumo(db, id_insumo)
-    if not insumo:
-        return None
-    for field, value in data.model_dump(exclude_unset=True).items():
-        setattr(insumo, field, value)
-    db.commit()
-    db.refresh(insumo)
+async def update_insumo(db: AsyncSession, insumo: Insumo, data: dict) -> Insumo:
+    for key, value in data.items():
+        setattr(insumo, key, value)
+    await db.flush()
+    await db.refresh(insumo)
     return insumo
 
 
-def delete_insumo(db: Session, id_insumo: int):
-    insumo = get_insumo(db, id_insumo)
-    if not insumo:
-        return None
-    db.delete(insumo)
-    db.commit()
-    return insumo
+async def delete_insumo(db: AsyncSession, insumo: Insumo) -> None:
+    await db.delete(insumo)
+    await db.flush()
 
 
 # ── Subreceta ─────────────────────────────────────────────────────────────────
 
-def get_subreceta(db: Session, id_subreceta: int):
-    return db.query(Subreceta).filter(Subreceta.id_subreceta == id_subreceta).first()
+async def get_subreceta_by_id(db: AsyncSession, id_subreceta: int) -> Subreceta | None:
+    result = await db.execute(
+        select(Subreceta)
+        .options(selectinload(Subreceta.ingredientes))
+        .where(Subreceta.id_subreceta == id_subreceta)
+    )
+    return result.scalar_one_or_none()
 
 
-def get_subrecetas(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(Subreceta).offset(skip).limit(limit).all()
+async def get_subrecetas(
+    db: AsyncSession,
+    *,
+    solo_activos: bool = False,
+    skip: int = 0,
+    limit: int = 100,
+) -> list[Subreceta]:
+    query = select(Subreceta)
+    if solo_activos:
+        query = query.where(Subreceta.activo.is_(True))
+    query = query.offset(skip).limit(limit)
+    result = await db.execute(query)
+    return list(result.scalars().all())
 
 
-def create_subreceta(db: Session, data: SubrecetaCreate):
-    subreceta = Subreceta(**data.model_dump())
+async def create_subreceta(db: AsyncSession, subreceta: Subreceta) -> Subreceta:
     db.add(subreceta)
-    db.commit()
-    db.refresh(subreceta)
+    await db.flush()
+    await db.refresh(subreceta)
     return subreceta
 
 
-def update_subreceta(db: Session, id_subreceta: int, data: SubrecetaUpdate):
-    subreceta = get_subreceta(db, id_subreceta)
-    if not subreceta:
-        return None
-    for field, value in data.model_dump(exclude_unset=True).items():
-        setattr(subreceta, field, value)
-    db.commit()
-    db.refresh(subreceta)
+async def update_subreceta(db: AsyncSession, subreceta: Subreceta, data: dict) -> Subreceta:
+    for key, value in data.items():
+        setattr(subreceta, key, value)
+    await db.flush()
+    await db.refresh(subreceta)
     return subreceta
 
 
-def delete_subreceta(db: Session, id_subreceta: int):
-    subreceta = get_subreceta(db, id_subreceta)
-    if not subreceta:
-        return None
-    db.delete(subreceta)
-    db.commit()
-    return subreceta
+async def delete_subreceta(db: AsyncSession, subreceta: Subreceta) -> None:
+    await db.delete(subreceta)
+    await db.flush()
 
 
 # ── SubrecetaIngrediente ──────────────────────────────────────────────────────
 
-def get_ingrediente(db: Session, id_subreceta: int, id_insumo: int):
-    return db.query(SubrecetaIngrediente).filter(
-        SubrecetaIngrediente.id_subreceta == id_subreceta,
-        SubrecetaIngrediente.id_insumo == id_insumo
-    ).first()
+async def get_ingrediente(
+    db: AsyncSession, id_subreceta: int, id_insumo: int
+) -> SubrecetaIngrediente | None:
+    result = await db.execute(
+        select(SubrecetaIngrediente).where(
+            SubrecetaIngrediente.id_subreceta == id_subreceta,
+            SubrecetaIngrediente.id_insumo == id_insumo,
+        )
+    )
+    return result.scalar_one_or_none()
 
 
-def get_ingredientes_by_subreceta(db: Session, id_subreceta: int):
-    return db.query(SubrecetaIngrediente).filter(
-        SubrecetaIngrediente.id_subreceta == id_subreceta
-    ).all()
+async def get_ingrediente_by_id(
+    db: AsyncSession, id_subreceta_ing: int
+) -> SubrecetaIngrediente | None:
+    return await db.get(SubrecetaIngrediente, id_subreceta_ing)
 
 
-def create_ingrediente(db: Session, data: SubrecetaIngredienteCreate):
-    ingrediente = SubrecetaIngrediente(**data.model_dump())
+async def get_ingredientes_by_subreceta(
+    db: AsyncSession, id_subreceta: int
+) -> list[SubrecetaIngrediente]:
+    result = await db.execute(
+        select(SubrecetaIngrediente).where(
+            SubrecetaIngrediente.id_subreceta == id_subreceta
+        )
+    )
+    return list(result.scalars().all())
+
+
+async def create_ingrediente(
+    db: AsyncSession, ingrediente: SubrecetaIngrediente
+) -> SubrecetaIngrediente:
     db.add(ingrediente)
-    db.commit()
-    db.refresh(ingrediente)
+    await db.flush()
+    await db.refresh(ingrediente)
     return ingrediente
 
 
-def update_ingrediente(db: Session, id_subreceta: int, id_insumo: int, data: SubrecetaIngredienteUpdate):
-    ingrediente = get_ingrediente(db, id_subreceta, id_insumo)
-    if not ingrediente:
-        return None
-    for field, value in data.model_dump(exclude_unset=True).items():
-        setattr(ingrediente, field, value)
-    db.commit()
-    db.refresh(ingrediente)
+async def update_ingrediente(
+    db: AsyncSession, ingrediente: SubrecetaIngrediente, data: dict
+) -> SubrecetaIngrediente:
+    for key, value in data.items():
+        setattr(ingrediente, key, value)
+    await db.flush()
+    await db.refresh(ingrediente)
     return ingrediente
 
 
-def delete_ingrediente(db: Session, id_subreceta: int, id_insumo: int):
-    ingrediente = get_ingrediente(db, id_subreceta, id_insumo)
-    if not ingrediente:
-        return None
-    db.delete(ingrediente)
-    db.commit()
-    return ingrediente
+async def delete_ingrediente(
+    db: AsyncSession, ingrediente: SubrecetaIngrediente
+) -> None:
+    await db.delete(ingrediente)
+    await db.flush()
