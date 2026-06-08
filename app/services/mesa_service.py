@@ -44,7 +44,7 @@ def _validate_mesa_transition(current: str, next_state: str) -> None:
         raise MajesaError(
             f"Transición de mesa inválida: {current!r} → {next_state!r}. "
             f"Permitidas: {sorted(allowed) or 'ninguna'}",
-            409,
+            400,
         )
 
 
@@ -159,3 +159,8 @@ async def cambiar_estado_reserva(
     reserva = await mesa_repo.update_reserva(db, reserva, update_data)
     await db.commit()
     return reserva
+async def delete_mesa(db: AsyncSession, id_mesa: int) -> None:
+    """Soft delete: sets activo = False instead of deleting the record."""
+    mesa = await get_mesa(db, id_mesa)
+    await mesa_repo.update_mesa(db, mesa, {"activo": False})
+    await db.commit()
