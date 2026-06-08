@@ -2,15 +2,7 @@
 migrations/env.py
 
 Alembic environment configuration file.
-
-Loads the database connection from application settings and registers
-SQLAlchemy metadata so Alembic can detect schema changes and generate
-migrations automatically.
-
-Supports offline and online migration execution.
-
 Author: Suley Suarez
-
 """
 
 from logging.config import fileConfig
@@ -31,6 +23,13 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+SCHEMAS = {"pos", "mkt"}
+
+def include_object(object, name, type_, reflected, compare_to):
+    if type_ == "table":
+        return object.schema in SCHEMAS
+    return True
+
 def run_migrations_offline():
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
@@ -38,6 +37,9 @@ def run_migrations_offline():
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_schemas=True,
+        compare_type=True,
+        include_object=include_object,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -51,7 +53,10 @@ def run_migrations_online():
     with connectable.connect() as connection:
         context.configure(
             connection=connection,
-            target_metadata=target_metadata
+            target_metadata=target_metadata,
+            include_schemas=True,
+            compare_type=True,
+            include_object=include_object,
         )
         with context.begin_transaction():
             context.run_migrations()

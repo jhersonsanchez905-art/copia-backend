@@ -1,14 +1,18 @@
 """
 app/models/auditoria.py
-
 Audit log model for traceability of all system actions.
-
 Author: Suley Suarez
 """
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
+import datetime
+
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
-from datetime import datetime
+
 from app.database import Base
+
+
+def _now():
+    return datetime.datetime.now(datetime.timezone.utc)
 
 
 class Auditoria(Base):
@@ -17,9 +21,16 @@ class Auditoria(Base):
 
     id_auditoria = Column(Integer, primary_key=True, index=True)
     id_usuario = Column(Integer, ForeignKey("pos.usuario.id_usuario"), nullable=True)
-    action_performed = Column(String(100), nullable=False)
-    status = Column(String(20), nullable=False)
-    descripcion = Column(String(255))
-    payload = Column(Text, nullable=True)
-    ip = Column(String(45), nullable=True)
-    tms = Column(DateTime, default=datetime.utcnow, nullable=False)
+    entidad = Column(String(60), nullable=False)
+    id_registro = Column(Integer, nullable=True)
+    # CREATE | UPDATE | DELETE | LOGIN | LOGOUT | APPROVE | REJECT
+    accion = Column(String(20), nullable=False)
+    # exitoso | fallido
+    estado = Column(String(20), nullable=False, default="exitoso")
+    descripcion = Column(String)
+    payload = Column(JSON, nullable=True)
+    ip = Column(String(45))
+    user_agent = Column(String(255))
+    fecha = Column(DateTime(timezone=True), default=_now, nullable=False)
+
+    usuario = relationship("Usuario")
