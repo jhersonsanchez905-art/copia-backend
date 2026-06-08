@@ -22,6 +22,7 @@ router = APIRouter(prefix="/reservas", tags=["Reservas"])
 async def listar_reservas(
     id_mesa: int | None = Query(None, description="Filtrar por mesa"),
     estado: EstadoReservaEnum | None = Query(None),
+    fecha: str | None = Query(None, description="Filtrar por fecha (YYYY-MM-DD)"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
@@ -30,6 +31,7 @@ async def listar_reservas(
         db,
         id_mesa=id_mesa,
         estado=estado.value if estado else None,
+        fecha=fecha,
         skip=skip,
         limit=limit,
     )

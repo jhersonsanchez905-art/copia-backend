@@ -16,6 +16,7 @@ async def get_many(
     db: AsyncSession,
     id_mesa: int | None = None,
     estado: str | None = None,
+    fecha: str | None = None,
     skip: int = 0,
     limit: int = 50,
 ) -> list[Reserva]:
@@ -24,6 +25,8 @@ async def get_many(
         q = q.where(Reserva.id_mesa == id_mesa)
     if estado is not None:
         q = q.where(Reserva.estado == estado)
+    if fecha is not None:
+        q = q.where(Reserva.fecha_hora >= fecha, Reserva.fecha_hora < fecha + " 23:59:59")
     q = q.order_by(Reserva.fecha_hora.asc()).offset(skip).limit(limit)
     result = await db.execute(q)
     return list(result.scalars().all())
