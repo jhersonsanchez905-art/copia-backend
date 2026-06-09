@@ -43,6 +43,8 @@ async def update_servicio(
     servicio = await servicio_adicional_repo.update_servicio(db, servicio, fields)
     await db.commit()
     return servicio
+
+
 async def cambiar_estado_servicio(
     db: AsyncSession, id_servicio: int, activo: bool
 ) -> ServicioAdicional:
