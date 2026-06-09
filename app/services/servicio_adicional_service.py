@@ -43,3 +43,14 @@ async def update_servicio(
     servicio = await servicio_adicional_repo.update_servicio(db, servicio, fields)
     await db.commit()
     return servicio
+<<<<<<< HEAD
+=======
+async def cambiar_estado_servicio(
+    db: AsyncSession, id_servicio: int, activo: bool
+) -> ServicioAdicional:
+    """Activate or deactivate a service."""
+    servicio = await get_servicio(db, id_servicio)
+    servicio = await servicio_adicional_repo.update_servicio(db, servicio, {"activo": activo})
+    await db.commit()
+    return servicio
+>>>>>>> 37ef0cb (feat: complete pedido, caja, and devolucion flows)

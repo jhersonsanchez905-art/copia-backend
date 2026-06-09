@@ -2,7 +2,11 @@
 devolucion_repo.py
 Async repository for Devolucion (returns).
 
+<<<<<<< HEAD
 Author: Jherson
+=======
+Author: SebasValero12
+>>>>>>> 37ef0cb (feat: complete pedido, caja, and devolucion flows)
 Issue: #40
 """
 from typing import Optional

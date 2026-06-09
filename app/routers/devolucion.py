@@ -3,7 +3,11 @@ devolucion.py (router)
 Endpoints for Devolucion (returns).
 States: pendiente → aprobada | rechazada
 
+<<<<<<< HEAD
 Author: Jherson
+=======
+Author: SebasValero12
+>>>>>>> 37ef0cb (feat: complete pedido, caja, and devolucion flows)
 Issue: #40
 """
 from fastapi import APIRouter, Depends, Query, status

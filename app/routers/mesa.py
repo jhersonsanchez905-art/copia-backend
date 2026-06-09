@@ -55,6 +55,21 @@ async def cambiar_estado_mesa(
     return await mesa_service.cambiar_estado_mesa(db, id_mesa, nuevo_estado)
 
 
+<<<<<<< HEAD
+=======
+@router.put("/{id_mesa}", response_model=MesaResponse)
+async def editar_mesa(
+    id_mesa: int, data: MesaUpdate, db: AsyncSession = Depends(get_db)
+):
+    return await mesa_service.update_mesa(db, id_mesa, data)
+
+
+@router.delete("/{id_mesa}", status_code=status.HTTP_204_NO_CONTENT)
+async def eliminar_mesa(id_mesa: int, db: AsyncSession = Depends(get_db)):
+    return await mesa_service.delete_mesa(db, id_mesa)
+
+
+>>>>>>> 37ef0cb (feat: complete pedido, caja, and devolucion flows)
 # ── Reserva ───────────────────────────────────────────────────────────────────
 
 @router.get("/{id_mesa}/reservas", response_model=list[ReservaResponse])
@@ -80,7 +95,10 @@ async def listar_reservas(
     status_code=status.HTTP_201_CREATED,
 )
 async def crear_reserva(data: ReservaCreate, db: AsyncSession = Depends(get_db)):
+<<<<<<< HEAD
     # TODO: extract id_usuario from Clerk token
+=======
+>>>>>>> 37ef0cb (feat: complete pedido, caja, and devolucion flows)
     id_usuario = 1
     return await mesa_service.create_reserva(db, data, id_usuario)
 
@@ -91,4 +109,8 @@ async def cambiar_estado_reserva(
     nuevo_estado: str = Query(..., description="confirmada | cancelada | completada"),
     db: AsyncSession = Depends(get_db),
 ):
+<<<<<<< HEAD
     return await mesa_service.cambiar_estado_reserva(db, id_reserva, nuevo_estado)
+=======
+    return await mesa_service.cambiar_estado_reserva(db, id_reserva, nuevo_estado)
+>>>>>>> 37ef0cb (feat: complete pedido, caja, and devolucion flows)

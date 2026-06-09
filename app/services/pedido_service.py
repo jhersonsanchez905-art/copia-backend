@@ -3,7 +3,11 @@ pedido_service.py
 Async business logic for Pedido, PedidoItem, and PedidoServicio.
 Mesero flow: abierto → enviado → pagado | cancelado
 
+<<<<<<< HEAD
 Author: Jherson
+=======
+Author: SebasValero12
+>>>>>>> 37ef0cb (feat: complete pedido, caja, and devolucion flows)
 Issue: #40
 """
 import datetime

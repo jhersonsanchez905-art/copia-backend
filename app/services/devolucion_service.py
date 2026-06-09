@@ -3,7 +3,11 @@ devolucion_service.py
 Async business logic for Devolucion (returns).
 States: pendiente → aprobada | rechazada
 
+<<<<<<< HEAD
 Author: Jherson
+=======
+Author: SebasValero12
+>>>>>>> 37ef0cb (feat: complete pedido, caja, and devolucion flows)
 Issue: #40
 """
 import datetime

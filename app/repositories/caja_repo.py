@@ -2,7 +2,11 @@
 caja_repo.py
 Async repository for AperturaCaja, CierreCaja, and CierreCajaDetalle.
 
+<<<<<<< HEAD
 Author: Suley Suarez / Jherson
+=======
+Author: Suley Suarez / SebasValero12
+>>>>>>> 37ef0cb (feat: complete pedido, caja, and devolucion flows)
 Issue: #16, #40
 """
 from datetime import date as date_type

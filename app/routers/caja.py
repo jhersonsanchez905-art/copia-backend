@@ -2,7 +2,11 @@
 caja.py (router)
 Endpoints for cash register: apertura, cierre, and queries.
 
+<<<<<<< HEAD
 Author: Suley Suarez / Jherson
+=======
+Author: Suley Suarez / SebasValero12
+>>>>>>> 37ef0cb (feat: complete pedido, caja, and devolucion flows)
 Issue: #16, #40
 """
 from fastapi import APIRouter, Depends

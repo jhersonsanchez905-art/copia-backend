@@ -2,7 +2,11 @@
 pedido_repo.py
 Async repository for Pedido, PedidoItem, and PedidoServicio.
 
+<<<<<<< HEAD
 Author: Jherson
+=======
+Author: SebasValero12
+>>>>>>> 37ef0cb (feat: complete pedido, caja, and devolucion flows)
 Issue: #40
 """
 from sqlalchemy import select

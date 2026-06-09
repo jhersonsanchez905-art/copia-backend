@@ -47,3 +47,24 @@ async def actualizar_servicio(
     db: AsyncSession = Depends(get_db),
 ):
     return await servicio_adicional_service.update_servicio(db, id_servicio, data)
+<<<<<<< HEAD
+=======
+
+
+@router.put("/{id_servicio}", response_model=ServicioAdicionalResponse)
+async def editar_servicio(
+    id_servicio: int,
+    data: ServicioAdicionalUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    return await servicio_adicional_service.update_servicio(db, id_servicio, data)
+
+
+@router.patch("/{id_servicio}/estado", response_model=ServicioAdicionalResponse)
+async def cambiar_estado_servicio(
+    id_servicio: int,
+    activo: bool = Query(..., description="true para activar, false para desactivar"),
+    db: AsyncSession = Depends(get_db),
+):
+    return await servicio_adicional_service.cambiar_estado_servicio(db, id_servicio, activo)
+>>>>>>> 37ef0cb (feat: complete pedido, caja, and devolucion flows)

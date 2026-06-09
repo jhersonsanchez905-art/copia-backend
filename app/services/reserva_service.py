@@ -63,7 +63,11 @@ async def get_reservas(
     limit: int = 50,
 ) -> list[Reserva]:
     return await reserva_repo.get_many(
+<<<<<<< HEAD
         db, id_mesa=id_mesa, estado=estado, skip=skip, limit=limit
+=======
+      db, id_mesa=id_mesa, estado=estado, fecha=fecha, skip=skip, limit=limit
+>>>>>>> 37ef0cb (feat: complete pedido, caja, and devolucion flows)
     )
 
 
