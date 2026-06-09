@@ -2,11 +2,7 @@
 caja_repo.py
 Async repository for AperturaCaja, CierreCaja, and CierreCajaDetalle.
 
-<<<<<<< HEAD
 Author: Suley Suarez / Jherson
-=======
-Author: Suley Suarez / SebasValero12
->>>>>>> 37ef0cb (feat: complete pedido, caja, and devolucion flows)
 Issue: #16, #40
 """
 from datetime import date as date_type
@@ -45,6 +41,22 @@ async def get_apertura_by_turno_fecha(
             AperturaCaja.turno == turno,
             AperturaCaja.fecha == fecha,
         )
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_apertura_activa(
+    id_usuario: int, turno: str, db: AsyncSession
+) -> Optional[AperturaCaja]:
+    """Retrieve the active opening for a user and shift if it exists."""
+    result = await db.execute(
+        select(AperturaCaja)
+        .where(
+            AperturaCaja.id_usuario == id_usuario,
+            AperturaCaja.turno == turno,
+        )
+        .order_by(AperturaCaja.hora_apertura.desc())
+        .limit(1)
     )
     return result.scalar_one_or_none()
 

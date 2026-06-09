@@ -3,11 +3,7 @@ caja_service.py
 Async business logic for cash register module.
 Handles shift opening and closing with payment method breakdown.
 
-<<<<<<< HEAD
 Author: Suley Suarez / Jherson
-=======
-Author: Suley Suarez / SebasValero12
->>>>>>> 37ef0cb (feat: complete pedido, caja, and devolucion flows)
 Issue: #16, #40
 """
 import datetime

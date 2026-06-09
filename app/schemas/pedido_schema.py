@@ -4,11 +4,7 @@ Pydantic schemas for Pedido, PedidoItem, and PedidoServicio.
 Mesero flow: abierto → enviado → pagado | cancelado
 PedidoItem flow: pendiente → en_preparacion → listo → entregado | cancelado
 
-<<<<<<< HEAD
-Author: Jherson
-=======
-Author: SebasValero12
->>>>>>> 37ef0cb (feat: complete pedido, caja, and devolucion flows)
+Author: Jherson / SebasValero12
 Issue: #40
 """
 from datetime import datetime
@@ -49,7 +45,9 @@ class PedidoItemCreate(PedidoItemBase):
 
 class PedidoItemUpdate(BaseModel):
     cantidad: Optional[int] = Field(None, ge=1)
+    precio_unitario: Optional[Decimal] = Field(None, gt=0)
     observaciones: Optional[str] = None
+    estado: Optional[EstadoPedidoItemEnum] = None
 
 
 class PedidoItemResponse(PedidoItemBase):

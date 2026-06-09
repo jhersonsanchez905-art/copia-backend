@@ -3,11 +3,7 @@ pedido.py (router)
 Endpoints for Pedido, PedidoItem, and PedidoServicio.
 Mesero flow: abierto → enviado → pagado | cancelado
 
-<<<<<<< HEAD
-Author: Jherson
-=======
-Author: SebasValero12
->>>>>>> 37ef0cb (feat: complete pedido, caja, and devolucion flows)
+Author: Jherson / SebasValero12
 Issue: #40
 """
 from fastapi import APIRouter, Depends, Query, status
@@ -48,6 +44,29 @@ async def obtener_pedido(id_pedido: int, db: AsyncSession = Depends(get_db)):
 async def crear_pedido(data: PedidoCreate, db: AsyncSession = Depends(get_db)):
     id_usuario = 1  # TODO: extract from Clerk token
     return await pedido_service.create_pedido(db, data, id_usuario)
+
+
+@router.patch("/{id_pedido}/estado", response_model=PedidoResponse)
+async def cambiar_estado_pedido(
+    id_pedido: int,
+    nuevo_estado: str = Query(..., description="enviado | cancelado"),
+    db: AsyncSession = Depends(get_db),
+):
+    return await pedido_service.cambiar_estado_pedido(db, id_pedido, nuevo_estado)
+
+
+@router.patch("/{id_pedido}/enviar", response_model=PedidoResponse)
+async def enviar_pedido(
+    id_pedido: int, db: AsyncSession = Depends(get_db)
+):
+    return await pedido_service.enviar_pedido(db, id_pedido)
+
+
+@router.patch("/{id_pedido}/cancelar", response_model=PedidoResponse)
+async def cancelar_pedido(
+    id_pedido: int, db: AsyncSession = Depends(get_db)
+):
+    return await pedido_service.cancelar_pedido(db, id_pedido)
 
 
 # ── Items ─────────────────────────────────────────────────────────────────────
@@ -126,19 +145,3 @@ async def eliminar_servicio(
     db: AsyncSession = Depends(get_db),
 ):
     await pedido_service.eliminar_servicio(db, id_pedido, id_servicio)
-
-
-# ── Estado transitions ────────────────────────────────────────────────────────
-
-@router.patch("/{id_pedido}/enviar", response_model=PedidoResponse)
-async def enviar_pedido(
-    id_pedido: int, db: AsyncSession = Depends(get_db)
-):
-    return await pedido_service.enviar_pedido(db, id_pedido)
-
-
-@router.patch("/{id_pedido}/cancelar", response_model=PedidoResponse)
-async def cancelar_pedido(
-    id_pedido: int, db: AsyncSession = Depends(get_db)
-):
-    return await pedido_service.cancelar_pedido(db, id_pedido)

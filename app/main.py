@@ -3,23 +3,12 @@ app/main.py
 Application entry point.
 Initializes FastAPI, registers routers, middleware, and exception handlers.
 
-<<<<<<< HEAD
-Author: Suley Suarez
-=======
 Author: Suley Suarez / Johan Valero / Ivan Ospino / Carlos Espinel
-<<<<<<< HEAD
->>>>>>> e922ab1babb83a8319efb9d6e49238328f5b17f8
-=======
->>>>>>> b9745b839168a40b0af6417338db9017ddc9b68a
->>>>>>> 37ef0cb (feat: complete pedido, caja, and devolucion flows)
 Issue: #1, #40
 """
 from fastapi import FastAPI
 
 from app.exceptions import MajesaError, majesa_exception_handler
-<<<<<<< HEAD
-from app.routers import insumo, orden_compra, producto, receta
-=======
 from app.middleware.auditoria import AuditoriaMiddleware
 from app.routers import (
     ajuste_inventario,
@@ -40,11 +29,6 @@ from app.routers import (
     stock,
     venta,
 )
-<<<<<<< HEAD
->>>>>>> e922ab1babb83a8319efb9d6e49238328f5b17f8
-=======
->>>>>>> b9745b839168a40b0af6417338db9017ddc9b68a
->>>>>>> 37ef0cb (feat: complete pedido, caja, and devolucion flows)
 
 app = FastAPI(
     title="Majesa API",
@@ -83,16 +67,3 @@ app.include_router(auditoria.router, prefix=_V1)
 @app.get("/health", tags=["Health"])
 def health():
     return {"status": "ok", "project": "Majesa Backend"}
-<<<<<<< HEAD
-
-
-app.include_router(insumo.router, prefix="/api/v1")
-app.include_router(orden_compra.router, prefix="/api/v1")
-app.include_router(producto.router, prefix="/api/v1")
-app.include_router(receta.router, prefix="/api/v1")
-=======
-<<<<<<< HEAD
->>>>>>> e922ab1babb83a8319efb9d6e49238328f5b17f8
-=======
->>>>>>> b9745b839168a40b0af6417338db9017ddc9b68a
->>>>>>> 37ef0cb (feat: complete pedido, caja, and devolucion flows)

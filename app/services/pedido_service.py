@@ -3,19 +3,17 @@ pedido_service.py
 Async business logic for Pedido, PedidoItem, and PedidoServicio.
 Mesero flow: abierto → enviado → pagado | cancelado
 
-<<<<<<< HEAD
-Author: Jherson
-=======
-Author: SebasValero12
->>>>>>> 37ef0cb (feat: complete pedido, caja, and devolucion flows)
+Author: Jherson / SebasValero12
 Issue: #40
 """
 import datetime
 from decimal import Decimal
 
+from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import MajesaError
+from app.models.mesa import Mesa
 from app.models.pedido import Pedido, PedidoItem, PedidoServicio
 from app.repositories import mesa_repo, pedido_repo, servicio_adicional_repo
 from app.schemas.pedido_schema import (
@@ -23,6 +21,7 @@ from app.schemas.pedido_schema import (
     PedidoItemCreate,
     PedidoItemUpdate,
     PedidoServicioCreate,
+    PedidoUpdate,
 )
 
 
