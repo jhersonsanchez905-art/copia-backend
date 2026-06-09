@@ -6,7 +6,9 @@ Initializes FastAPI, registers routers, middleware, and exception handlers.
 Author: Suley Suarez / Johan Valero / Ivan Ospino / Carlos Espinel
 Issue: #1, #40
 """
+
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.exceptions import MajesaError, majesa_exception_handler
 from app.middleware.auditoria import AuditoriaMiddleware
@@ -36,6 +38,15 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# ── CORS ──────────────────────────────────────────────────────────────────────
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # ── Middleware ────────────────────────────────────────────────────────────────
 app.add_middleware(AuditoriaMiddleware)
 
@@ -63,7 +74,10 @@ app.include_router(servicio_adicional.router, prefix=_V1)
 app.include_router(alerta_perecible.router, prefix=_V1)
 app.include_router(auditoria.router, prefix=_V1)
 
-
+# ── Health Check ──────────────────────────────────────────────────────────────
 @app.get("/health", tags=["Health"])
 def health():
-    return {"status": "ok", "project": "Majesa Backend"}
+    return {
+        "status": "ok",
+        "project": "Majesa Backend",
+    }
