@@ -1,16 +1,14 @@
 """
-ajuste_inventario.py
-Endpoints para ajustes manuales de inventario con flujo de aprobación.
-Autor: Ivan Ospino
-Issue: #21
+ajuste_inventario.py (router)
+Endpoints for manual inventory adjustments with approval flow.
+Only Administrador can approve or reject adjustments.
 """
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.schemas.ajuste_inventario_schema import (
-    AjusteInventarioAprobar,
-    AjusteInventarioRechazar,
+    AjusteInventarioAprobacion,
     AjusteInventarioCreate,
     AjusteInventarioResponse,
     EstadoAjusteEnum,
@@ -42,38 +40,33 @@ async def obtener_ajuste(id_ajuste: int, db: AsyncSession = Depends(get_db)):
     return await ajuste_inventario_service.get_ajuste_by_id(db, id_ajuste)
 
 
-@router.post("", response_model=AjusteInventarioResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=AjusteInventarioResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Solicitar ajuste manual de inventario (queda en estado pendiente)",
+)
 async def solicitar_ajuste(
     data: AjusteInventarioCreate, db: AsyncSession = Depends(get_db)
 ):
-    # TODO: extraer id_usuario del token Clerk
+    # TODO: extract id_usuario from Clerk token
     id_usuario = 1
     return await ajuste_inventario_service.solicitar_ajuste(db, data, id_usuario)
 
 
-@router.patch("/{id_ajuste}/aprobar", response_model=AjusteInventarioResponse)
-async def aprobar_ajuste(
+@router.patch(
+    "/{id_ajuste}/resolver",
+    response_model=AjusteInventarioResponse,
+    summary="Aprobar o rechazar ajuste (solo Administrador)",
+)
+async def resolver_ajuste(
     id_ajuste: int,
-    data: AjusteInventarioAprobar,
+    data: AjusteInventarioAprobacion,
     db: AsyncSession = Depends(get_db),
 ):
-    # TODO: extraer id_usuario y validar rol Administrador desde token Clerk
+    # TODO: extract id_usuario and validate Administrador role from Clerk token
     id_aprobador = 1
-    es_administrador = True
-    return await ajuste_inventario_service.aprobar_ajuste(
-        db, id_ajuste, data, id_aprobador, es_administrador
-    )
-
-
-@router.patch("/{id_ajuste}/rechazar", response_model=AjusteInventarioResponse)
-async def rechazar_ajuste(
-    id_ajuste: int,
-    data: AjusteInventarioRechazar,
-    db: AsyncSession = Depends(get_db),
-):
-    # TODO: extraer id_usuario y validar rol Administrador desde token Clerk
-    id_aprobador = 1
-    es_administrador = True
-    return await ajuste_inventario_service.rechazar_ajuste(
+    es_administrador = True  # placeholder until Clerk auth is wired
+    return await ajuste_inventario_service.resolver_ajuste(
         db, id_ajuste, data, id_aprobador, es_administrador
     )
