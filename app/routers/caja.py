@@ -1,67 +1,56 @@
 """
-caja.py (router)
-Endpoints for cash register: apertura, cierre, and queries.
+app/routers/caja.py
 
-Author: Suley Suarez / Jherson
-Issue: #16, #40
+HTTP endpoints for cash register module.
+Delegates all business logic to caja_service.
+
+Endpoints:
+    POST   /api/v1/caja/apertura              open a new shift
+    POST   /api/v1/caja/{id_apertura}/cierre  close a shift
+
+Author: Suley Suarez
+Issue: #16
 """
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.database import get_db
+from app.services import caja_service
 from app.schemas.caja_schema import (
     AperturaCajaRequest,
     AperturaCajaResponse,
     CierreCajaRequest,
-    CierreCajaResponse,
+    CierreCajaResponse
 )
-from app.services import caja_service
 
 router = APIRouter()
 
 
-# ── Apertura ──────────────────────────────────────────────────────────────────
-
 @router.post("/apertura", response_model=AperturaCajaResponse, status_code=201)
 async def abrir_caja(
     data: AperturaCajaRequest,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Open a new cash register shift (admin only)."""
-    id_usuario = 1  # TODO: extract from Clerk token
+    """
+    Open a new cash register shift.
+    Records the initial cash amount for the shift.
+    Only one opening per user per shift is allowed.
+    """
+    # TODO: get id_usuario from Clerk token
+    id_usuario = 1  # placeholder
     return await caja_service.abrir_caja(data, id_usuario, db)
 
 
-@router.get("/apertura/activa", response_model=AperturaCajaResponse)
-async def apertura_activa(db: AsyncSession = Depends(get_db)):
-    """Get the currently active (not yet closed) apertura."""
-    return await caja_service.get_apertura_activa(db)
-
-
-# ── Cierre ────────────────────────────────────────────────────────────────────
-
-@router.post("/cierre", response_model=CierreCajaResponse, status_code=201)
+@router.post("/{id_apertura}/cierre", response_model=CierreCajaResponse, status_code=201)
 async def cerrar_caja(
+    id_apertura: int,
     data: CierreCajaRequest,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db)
 ):
     """
-    Close the currently active cash register shift (admin only).
+    Close a cash register shift.
     Calculates expected totals from sales and compares with counted amounts.
+    Only admin role can close the register.
     """
-    id_usuario = 1  # TODO: extract from Clerk token
-    return await caja_service.cerrar_caja(data, id_usuario, db)
-
-
-@router.get("/cierres", response_model=list[CierreCajaResponse])
-async def listar_cierres(db: AsyncSession = Depends(get_db)):
-    """List all cash register closings (admin only)."""
-    return await caja_service.get_cierres(db)
-
-
-@router.get("/cierres/{id_cierre}", response_model=CierreCajaResponse)
-async def obtener_cierre(
-    id_cierre: int, db: AsyncSession = Depends(get_db)
-):
-    """Get a specific cash register closing with details."""
-    return await caja_service.get_cierre(db, id_cierre)
+    # TODO: get id_usuario from Clerk token and validate admin role
+    id_usuario = 1  # placeholder
+    return await caja_service.cerrar_caja(id_apertura, data, id_usuario, db)

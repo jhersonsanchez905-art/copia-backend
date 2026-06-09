@@ -1,8 +1,7 @@
 """
 ajuste_inventario_schema.py
-Schemas Pydantic para ajustes manuales de inventario con flujo de aprobación.
-Autor: Ivan Ospino
-Issue: #21
+Pydantic schemas for AjusteInventario with approval flow.
+Approval requires Administrador role.
 """
 from datetime import datetime
 from decimal import Decimal
@@ -19,16 +18,13 @@ class EstadoAjusteEnum(str, Enum):
 
 class AjusteInventarioCreate(BaseModel):
     id_insumo: int
-    cantidad: Decimal = Field(..., description="Positivo para ingresar stock, negativo para descontar")
+    cantidad: Decimal = Field(..., description="Positive to add stock, negative to subtract")
     motivo: str = Field(..., min_length=1)
     observacion: Optional[str] = None
 
 
-class AjusteInventarioAprobar(BaseModel):
-    observacion: Optional[str] = None
-
-
-class AjusteInventarioRechazar(BaseModel):
+class AjusteInventarioAprobacion(BaseModel):
+    estado: EstadoAjusteEnum = Field(..., description="aprobado or rechazado only")
     observacion: Optional[str] = None
 
 
