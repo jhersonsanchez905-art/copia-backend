@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.dependencies.auth import get_current_user
+from app.models.catalogo import Usuario
 from app.schemas.stock_schema import SemaforoEnum, StockResponse
 from app.services import stock_service
 
@@ -17,6 +19,7 @@ router = APIRouter(prefix="/stock", tags=["Stock"])
 async def listar_stock(
     semaforo: SemaforoEnum | None = Query(None, description="verde | amarillo | rojo"),
     db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
 ):
     return await stock_service.get_all_stocks(db, semaforo=semaforo.value if semaforo else None)
 
@@ -26,5 +29,9 @@ async def listar_stock(
     response_model=StockResponse,
     summary="Obtener stock de un insumo específico",
 )
-async def get_stock_insumo(id_insumo: int, db: AsyncSession = Depends(get_db)):
+async def get_stock_insumo(
+    id_insumo: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
     return await stock_service.get_stock_by_insumo(db, id_insumo)

@@ -7,6 +7,9 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.dependencies.auth import get_current_user
+from app.dependencies.roles import require_rol
+from app.models.catalogo import Usuario
 from app.schemas.receta_schema import (
     RecetaVersionCreate,
     RecetaVersionUpdate,
@@ -37,6 +40,7 @@ async def listar_versiones(
     producto_id: int,
     solo_vigente: bool = Query(False),
     db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
 ):
     return await receta_service.listar_versiones(db, producto_id, solo_vigente=solo_vigente)
 
@@ -46,7 +50,11 @@ async def listar_versiones(
     response_model=RecetaVersionResponse,
     summary="Obtener versión de receta por ID",
 )
-async def obtener_version(version_id: int, db: AsyncSession = Depends(get_db)):
+async def obtener_version(
+    version_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
     return await receta_service.obtener_version(db, version_id)
 
 
@@ -57,7 +65,9 @@ async def obtener_version(version_id: int, db: AsyncSession = Depends(get_db)):
     summary="Crear nueva versión de receta (desactiva versiones anteriores)",
 )
 async def crear_version(
-    payload: RecetaVersionCreate, db: AsyncSession = Depends(get_db)
+    payload: RecetaVersionCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
 ):
     return await receta_service.crear_version(db, payload)
 
@@ -71,6 +81,7 @@ async def actualizar_version(
     version_id: int,
     payload: RecetaVersionUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
 ):
     return await receta_service.actualizar_version(db, version_id, payload)
 
@@ -87,6 +98,7 @@ async def agregar_detalle_insumo(
     version_id: int,
     payload: RecetaDetalleInsumoCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
 ):
     return await receta_service.agregar_detalle_insumo(db, version_id, payload)
 
@@ -100,6 +112,7 @@ async def actualizar_detalle_insumo(
     detalle_id: int,
     payload: RecetaDetalleInsumoUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
 ):
     return await receta_service.actualizar_detalle_insumo(db, detalle_id, payload)
 
@@ -110,7 +123,9 @@ async def actualizar_detalle_insumo(
     summary="Eliminar detalle de insumo",
 )
 async def eliminar_detalle_insumo(
-    detalle_id: int, db: AsyncSession = Depends(get_db)
+    detalle_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
 ):
     await receta_service.eliminar_detalle_insumo(db, detalle_id)
 
@@ -127,6 +142,7 @@ async def agregar_detalle_subreceta(
     version_id: int,
     payload: RecetaDetalleSubrecetaCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
 ):
     return await receta_service.agregar_detalle_subreceta(db, version_id, payload)
 
@@ -140,6 +156,7 @@ async def actualizar_detalle_subreceta(
     detalle_id: int,
     payload: RecetaDetalleSubrecetaUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
 ):
     return await receta_service.actualizar_detalle_subreceta(db, detalle_id, payload)
 
@@ -150,7 +167,9 @@ async def actualizar_detalle_subreceta(
     summary="Eliminar detalle de subreceta",
 )
 async def eliminar_detalle_subreceta(
-    detalle_id: int, db: AsyncSession = Depends(get_db)
+    detalle_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
 ):
     await receta_service.eliminar_detalle_subreceta(db, detalle_id)
 
@@ -167,6 +186,7 @@ async def agregar_paso(
     version_id: int,
     payload: RecetaPasoCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
 ):
     return await receta_service.agregar_paso(db, version_id, payload)
 
@@ -180,6 +200,7 @@ async def actualizar_paso(
     paso_id: int,
     payload: RecetaPasoUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
 ):
     return await receta_service.actualizar_paso(db, paso_id, payload)
 
@@ -189,5 +210,9 @@ async def actualizar_paso(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Eliminar paso de receta",
 )
-async def eliminar_paso(paso_id: int, db: AsyncSession = Depends(get_db)):
+async def eliminar_paso(
+    paso_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
+):
     await receta_service.eliminar_paso(db, paso_id)

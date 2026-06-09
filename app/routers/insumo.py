@@ -6,6 +6,9 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.dependencies.auth import get_current_user
+from app.dependencies.roles import require_rol
+from app.models.catalogo import Usuario
 from app.services import insumo_service
 from app.schemas.insumo_schema import (
     InsumoCreate,
@@ -30,12 +33,17 @@ async def listar_insumos(
     limit: int = 100,
     solo_activos: bool = Query(False),
     db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
 ):
     return await insumo_service.get_insumos(db, skip=skip, limit=limit, solo_activos=solo_activos)
 
 
 @router.get("/insumos/{id_insumo}", response_model=InsumoResponse, tags=["Insumos"])
-async def obtener_insumo(id_insumo: int, db: AsyncSession = Depends(get_db)):
+async def obtener_insumo(
+    id_insumo: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
     return await insumo_service.get_insumo(db, id_insumo)
 
 
@@ -45,13 +53,20 @@ async def obtener_insumo(id_insumo: int, db: AsyncSession = Depends(get_db)):
     status_code=status.HTTP_201_CREATED,
     tags=["Insumos"],
 )
-async def crear_insumo(data: InsumoCreate, db: AsyncSession = Depends(get_db)):
+async def crear_insumo(
+    data: InsumoCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
+):
     return await insumo_service.create_insumo(db, data)
 
 
 @router.patch("/insumos/{id_insumo}", response_model=InsumoResponse, tags=["Insumos"])
 async def actualizar_insumo(
-    id_insumo: int, data: InsumoUpdate, db: AsyncSession = Depends(get_db)
+    id_insumo: int,
+    data: InsumoUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
 ):
     return await insumo_service.update_insumo(db, id_insumo, data)
 
@@ -61,7 +76,11 @@ async def actualizar_insumo(
     status_code=status.HTTP_204_NO_CONTENT,
     tags=["Insumos"],
 )
-async def eliminar_insumo(id_insumo: int, db: AsyncSession = Depends(get_db)):
+async def eliminar_insumo(
+    id_insumo: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
+):
     await insumo_service.delete_insumo(db, id_insumo)
 
 
@@ -73,12 +92,17 @@ async def listar_subrecetas(
     limit: int = 100,
     solo_activos: bool = Query(False),
     db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
 ):
     return await insumo_service.get_subrecetas(db, skip=skip, limit=limit, solo_activos=solo_activos)
 
 
 @router.get("/subrecetas/{id_subreceta}", response_model=SubrecetaResponse, tags=["Subrecetas"])
-async def obtener_subreceta(id_subreceta: int, db: AsyncSession = Depends(get_db)):
+async def obtener_subreceta(
+    id_subreceta: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
     return await insumo_service.get_subreceta(db, id_subreceta)
 
 
@@ -88,7 +112,11 @@ async def obtener_subreceta(id_subreceta: int, db: AsyncSession = Depends(get_db
     status_code=status.HTTP_201_CREATED,
     tags=["Subrecetas"],
 )
-async def crear_subreceta(data: SubrecetaCreate, db: AsyncSession = Depends(get_db)):
+async def crear_subreceta(
+    data: SubrecetaCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
+):
     return await insumo_service.create_subreceta(db, data)
 
 
@@ -96,7 +124,10 @@ async def crear_subreceta(data: SubrecetaCreate, db: AsyncSession = Depends(get_
     "/subrecetas/{id_subreceta}", response_model=SubrecetaResponse, tags=["Subrecetas"]
 )
 async def actualizar_subreceta(
-    id_subreceta: int, data: SubrecetaUpdate, db: AsyncSession = Depends(get_db)
+    id_subreceta: int,
+    data: SubrecetaUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
 ):
     return await insumo_service.update_subreceta(db, id_subreceta, data)
 
@@ -106,7 +137,11 @@ async def actualizar_subreceta(
     status_code=status.HTTP_204_NO_CONTENT,
     tags=["Subrecetas"],
 )
-async def eliminar_subreceta(id_subreceta: int, db: AsyncSession = Depends(get_db)):
+async def eliminar_subreceta(
+    id_subreceta: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
+):
     await insumo_service.delete_subreceta(db, id_subreceta)
 
 
@@ -117,7 +152,11 @@ async def eliminar_subreceta(id_subreceta: int, db: AsyncSession = Depends(get_d
     response_model=list[SubrecetaIngredienteResponse],
     tags=["Subrecetas"],
 )
-async def listar_ingredientes(id_subreceta: int, db: AsyncSession = Depends(get_db)):
+async def listar_ingredientes(
+    id_subreceta: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
     return await insumo_service.get_ingredientes_by_subreceta(db, id_subreceta)
 
 
@@ -128,7 +167,9 @@ async def listar_ingredientes(id_subreceta: int, db: AsyncSession = Depends(get_
     tags=["Subrecetas"],
 )
 async def crear_ingrediente(
-    data: SubrecetaIngredienteCreate, db: AsyncSession = Depends(get_db)
+    data: SubrecetaIngredienteCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
 ):
     return await insumo_service.create_ingrediente(db, data)
 
@@ -142,6 +183,7 @@ async def actualizar_ingrediente(
     id_subreceta_ing: int,
     data: SubrecetaIngredienteUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
 ):
     return await insumo_service.update_ingrediente(db, id_subreceta_ing, data)
 
@@ -152,6 +194,8 @@ async def actualizar_ingrediente(
     tags=["Subrecetas"],
 )
 async def eliminar_ingrediente(
-    id_subreceta_ing: int, db: AsyncSession = Depends(get_db)
+    id_subreceta_ing: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
 ):
     await insumo_service.delete_ingrediente(db, id_subreceta_ing)

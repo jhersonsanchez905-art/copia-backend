@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.dependencies.auth import get_current_user
+from app.models.catalogo import Usuario
 from app.schemas.alerta_perecible_schema import (
     AlertaPerecibleResponse,
     EstadoAlertaPerecibleEnum,
@@ -21,6 +23,7 @@ async def listar_alertas_perecibles(
     estado: EstadoAlertaPerecibleEnum | None = Query(None),
     id_insumo: int | None = Query(None),
     db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
 ):
     return await alerta_perecible_service.get_alertas_perecibles(
         db,
@@ -31,6 +34,8 @@ async def listar_alertas_perecibles(
 
 @router.get("/{id_alerta}", response_model=AlertaPerecibleResponse)
 async def obtener_alerta_perecible(
-    id_alerta: int, db: AsyncSession = Depends(get_db)
+    id_alerta: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
 ):
     return await alerta_perecible_service.get_alerta_perecible(db, id_alerta)

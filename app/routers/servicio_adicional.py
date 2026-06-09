@@ -6,6 +6,9 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.dependencies.auth import get_current_user
+from app.dependencies.roles import require_rol
+from app.models.catalogo import Usuario
 from app.schemas.servicio_adicional_schema import (
     ServicioAdicionalCreate,
     ServicioAdicionalUpdate,
@@ -20,12 +23,17 @@ router = APIRouter(prefix="/servicios-adicionales", tags=["Servicios Adicionales
 async def listar_servicios(
     solo_activos: bool = Query(True),
     db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
 ):
     return await servicio_adicional_service.get_servicios(db, solo_activos=solo_activos)
 
 
 @router.get("/{id_servicio}", response_model=ServicioAdicionalResponse)
-async def obtener_servicio(id_servicio: int, db: AsyncSession = Depends(get_db)):
+async def obtener_servicio(
+    id_servicio: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
     return await servicio_adicional_service.get_servicio(db, id_servicio)
 
 
@@ -35,7 +43,9 @@ async def obtener_servicio(id_servicio: int, db: AsyncSession = Depends(get_db))
     status_code=status.HTTP_201_CREATED,
 )
 async def crear_servicio(
-    data: ServicioAdicionalCreate, db: AsyncSession = Depends(get_db)
+    data: ServicioAdicionalCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
 ):
     return await servicio_adicional_service.create_servicio(db, data)
 
@@ -45,5 +55,6 @@ async def actualizar_servicio(
     id_servicio: int,
     data: ServicioAdicionalUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
 ):
     return await servicio_adicional_service.update_servicio(db, id_servicio, data)
