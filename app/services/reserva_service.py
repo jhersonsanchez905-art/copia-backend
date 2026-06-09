@@ -59,11 +59,12 @@ async def get_reservas(
     db: AsyncSession,
     id_mesa: int | None = None,
     estado: str | None = None,
+    fecha: str | None = None,
     skip: int = 0,
     limit: int = 50,
 ) -> list[Reserva]:
     return await reserva_repo.get_many(
-        db, id_mesa=id_mesa, estado=estado, skip=skip, limit=limit
+        db, id_mesa=id_mesa, estado=estado, fecha=fecha, skip=skip, limit=limit
     )
 
 

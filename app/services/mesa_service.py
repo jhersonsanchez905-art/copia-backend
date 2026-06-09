@@ -103,6 +103,13 @@ async def cambiar_estado_mesa(
     return mesa
 
 
+async def delete_mesa(db: AsyncSession, id_mesa: int) -> None:
+    """Soft delete: sets activo = False instead of deleting the record."""
+    mesa = await get_mesa(db, id_mesa)
+    await mesa_repo.update_mesa(db, mesa, {"activo": False})
+    await db.commit()
+
+
 # ── Reserva ───────────────────────────────────────────────────────────────────
 
 async def get_reserva(db: AsyncSession, id_reserva: int) -> Reserva:
@@ -133,7 +140,6 @@ async def create_reserva(
         fecha_creacion=_now(),
     )
     reserva = await mesa_repo.create_reserva(db, reserva)
-    # Mark mesa as reservada
     await mesa_repo.update_mesa(db, mesa, {"estado": "reservada"})
     await db.commit()
     return reserva
@@ -150,7 +156,6 @@ async def cambiar_estado_reserva(
     mesa = await mesa_repo.get_mesa_by_id(db, reserva.id_mesa)
     if mesa:
         if nuevo_estado == "completada":
-            # Customer arrives — mesa becomes ocupada
             _validate_mesa_transition(mesa.estado, "ocupada")
             await mesa_repo.update_mesa(db, mesa, {"estado": "ocupada"})
         elif nuevo_estado == "cancelada" and mesa.estado == "reservada":

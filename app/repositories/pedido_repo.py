@@ -1,6 +1,9 @@
 """
 pedido_repo.py
 Async repository for Pedido, PedidoItem, and PedidoServicio.
+
+Author: Jherson / SebasValero12
+Issue: #40
 """
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -79,6 +82,11 @@ async def update_pedido_item(
     return item
 
 
+async def delete_pedido_item(db: AsyncSession, item: PedidoItem) -> None:
+    await db.delete(item)
+    await db.flush()
+
+
 # ── PedidoServicio ────────────────────────────────────────────────────────────
 
 async def get_pedido_servicio_by_id(
@@ -94,3 +102,10 @@ async def create_pedido_servicio(
     await db.flush()
     await db.refresh(servicio)
     return servicio
+
+
+async def delete_pedido_servicio(
+    db: AsyncSession, servicio: PedidoServicio
+) -> None:
+    await db.delete(servicio)
+    await db.flush()
