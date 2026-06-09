@@ -30,7 +30,7 @@ class Pedido(Base):
     observaciones = Column(String)
 
     mesa = relationship("Mesa", back_populates="pedidos")
-    usuario = relationship("Usuario")
+    usuario = relationship("Usuario", back_populates="pedidos")
     reserva = relationship("Reserva", back_populates="pedido")
     items = relationship("PedidoItem", back_populates="pedido", cascade="all, delete-orphan")
     servicios = relationship("PedidoServicio", back_populates="pedido", cascade="all, delete-orphan")
@@ -52,7 +52,7 @@ class PedidoItem(Base):
     estado = Column(String(20), nullable=False, default="pendiente")
 
     pedido = relationship("Pedido", back_populates="items")
-    producto = relationship("Producto")
+    producto = relationship("Producto", back_populates="pedido_items")
 
 
 class PedidoServicio(Base):
