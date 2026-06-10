@@ -52,7 +52,7 @@ async def obtener_reserva(
 async def crear_reserva(
     data: ReservaCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: Usuario = Depends(require_rol("administrador")),
+    current_user: Usuario = Depends(require_rol("mesero", "administrador")),
 ):
     return await reserva_service.crear_reserva(db, data, current_user.id_usuario)
 

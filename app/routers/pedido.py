@@ -54,7 +54,7 @@ async def cambiar_estado_pedido(
     id_pedido: int,
     nuevo_estado: str = Query(..., description="enviado | cancelado"),
     db: AsyncSession = Depends(get_db),
-    current_user: Usuario = Depends(require_rol("mesero", "administrador")),
+    current_user: Usuario = Depends(require_rol("cajero", "mesero", "administrador")),
 ):
     return await pedido_service.cambiar_estado_pedido(db, id_pedido, nuevo_estado)
 

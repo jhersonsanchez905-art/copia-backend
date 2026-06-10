@@ -25,7 +25,7 @@ router = APIRouter()
 async def abrir_caja(
     data: AperturaCajaRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: Usuario = Depends(require_rol("administrador")),
+    current_user: Usuario = Depends(require_rol("cajero", "administrador")),
 ):
     return await caja_service.abrir_caja(data, current_user.id_usuario, db)
 
@@ -33,7 +33,7 @@ async def abrir_caja(
 @router.get("/apertura/activa", response_model=AperturaCajaResponse)
 async def apertura_activa(
     db: AsyncSession = Depends(get_db),
-    current_user: Usuario = Depends(require_rol("administrador")),
+    current_user: Usuario = Depends(require_rol("cajero", "administrador")),
 ):
     return await caja_service.get_apertura_activa(db)
 
@@ -42,7 +42,7 @@ async def apertura_activa(
 async def cerrar_caja(
     data: CierreCajaRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: Usuario = Depends(require_rol("administrador")),
+    current_user: Usuario = Depends(require_rol("cajero", "administrador")),
 ):
     return await caja_service.cerrar_caja(data, current_user.id_usuario, db)
 

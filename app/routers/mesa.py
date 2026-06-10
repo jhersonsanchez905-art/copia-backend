@@ -66,7 +66,7 @@ async def cambiar_estado_mesa(
     id_mesa: int,
     nuevo_estado: str = Query(..., description="disponible | ocupada | reservada"),
     db: AsyncSession = Depends(get_db),
-    current_user: Usuario = Depends(require_rol("administrador")),
+    current_user: Usuario = Depends(require_rol("cajero", "mesero", "administrador")),
 ):
     return await mesa_service.cambiar_estado_mesa(db, id_mesa, nuevo_estado)
 
@@ -100,7 +100,7 @@ async def listar_reservas(
 async def crear_reserva(
     data: ReservaCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: Usuario = Depends(require_rol("administrador")),
+    current_user: Usuario = Depends(require_rol("cajero", "mesero", "administrador")),
 ):
     return await mesa_service.create_reserva(db, data, current_user.id_usuario)
 

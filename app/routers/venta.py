@@ -23,7 +23,7 @@ router = APIRouter()
 async def registrar_venta(
     data: VentaCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: Usuario = Depends(require_rol("administrador")),
+    current_user: Usuario = Depends(require_rol("cajero", "administrador")),
 ):
     return await venta_service.registrar_venta(data, current_user.id_usuario, db)
 
