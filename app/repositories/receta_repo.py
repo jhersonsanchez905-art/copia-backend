@@ -23,6 +23,7 @@ async def get_version_by_id(
     result = await db.execute(
         select(RecetaVersion)
         .options(
+            selectinload(RecetaVersion.producto),
             selectinload(RecetaVersion.detalles_insumo),
             selectinload(RecetaVersion.detalles_subreceta),
             selectinload(RecetaVersion.pasos),
@@ -58,6 +59,7 @@ async def get_versions_by_producto(
     query = (
         select(RecetaVersion)
         .options(
+            selectinload(RecetaVersion.producto),
             selectinload(RecetaVersion.detalles_insumo),
             selectinload(RecetaVersion.detalles_subreceta),
             selectinload(RecetaVersion.pasos),
@@ -81,6 +83,7 @@ async def get_all_versions(
     query = (
         select(RecetaVersion)
         .options(
+            selectinload(RecetaVersion.producto),
             selectinload(RecetaVersion.detalles_insumo),
             selectinload(RecetaVersion.detalles_subreceta),
             selectinload(RecetaVersion.pasos),
