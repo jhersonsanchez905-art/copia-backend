@@ -42,7 +42,6 @@ async def apertura_activa(db: AsyncSession = Depends(get_db)):
 
 @router.post("/cierre", response_model=CierreCajaResponse, status_code=201)
 async def cerrar_caja(
-    id_apertura: int,
     data: CierreCajaRequest,
     db: AsyncSession = Depends(get_db),
 ):
