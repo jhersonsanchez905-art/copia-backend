@@ -15,6 +15,7 @@ from app.middleware.auditoria import AuditoriaMiddleware
 from app.routers import (
     ajuste_inventario,
     alerta_perecible,
+    auth,
     auditoria,
     caja,
     catalogo,
@@ -56,6 +57,7 @@ app.add_exception_handler(MajesaError, majesa_exception_handler)
 # ── Routers ───────────────────────────────────────────────────────────────────
 _V1 = "/api/v1"
 
+app.include_router(auth.router, prefix=_V1)
 app.include_router(producto.router, prefix=_V1, tags=["Productos"])
 app.include_router(receta.router, prefix=_V1)
 app.include_router(insumo.router, prefix=_V1)

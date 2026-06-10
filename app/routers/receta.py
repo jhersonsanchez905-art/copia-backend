@@ -31,6 +31,17 @@ router = APIRouter(prefix="/recetas", tags=["Recetas"])
 
 # ── RecetaVersion ─────────────────────────────────────────────────────────────
 
+@router.get("", response_model=list[RecetaVersionResponse], summary="Listar todas las recetas")
+async def listar_todas_las_recetas(
+    solo_vigente: bool = Query(False, description="Solo versiones vigentes"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    return await receta_service.listar_todas_las_versiones(db, solo_vigente=solo_vigente, skip=skip, limit=limit)
+
+
 @router.get(
     "/producto/{producto_id}",
     response_model=list[RecetaVersionResponse],

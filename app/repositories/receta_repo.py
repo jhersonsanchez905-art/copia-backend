@@ -71,6 +71,29 @@ async def get_versions_by_producto(
     return list(result.scalars().all())
 
 
+async def get_all_versions(
+    db: AsyncSession,
+    *,
+    solo_vigente: bool = False,
+    skip: int = 0,
+    limit: int = 50,
+) -> list[RecetaVersion]:
+    query = (
+        select(RecetaVersion)
+        .options(
+            selectinload(RecetaVersion.detalles_insumo),
+            selectinload(RecetaVersion.detalles_subreceta),
+            selectinload(RecetaVersion.pasos),
+        )
+        .order_by(RecetaVersion.id_producto.asc(), RecetaVersion.version.desc())
+    )
+    if solo_vigente:
+        query = query.where(RecetaVersion.vigente.is_(True))
+    query = query.offset(skip).limit(limit)
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
 async def get_next_version_number(db: AsyncSession, producto_id: int) -> int:
     result = await db.execute(
         select(func.coalesce(func.max(RecetaVersion.version), 0)).where(

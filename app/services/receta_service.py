@@ -30,6 +30,16 @@ from app.schemas.receta_schema import (
 
 # ── RecetaVersion ─────────────────────────────────────────────────────────────
 
+async def listar_todas_las_versiones(
+    db: AsyncSession,
+    *,
+    solo_vigente: bool = False,
+    skip: int = 0,
+    limit: int = 50,
+) -> list[RecetaVersion]:
+    return await receta_repo.get_all_versions(db, solo_vigente=solo_vigente, skip=skip, limit=limit)
+
+
 async def listar_versiones(
     db: AsyncSession, producto_id: int, *, solo_vigente: bool = False
 ) -> list[RecetaVersion]:
