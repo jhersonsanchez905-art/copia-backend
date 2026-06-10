@@ -30,40 +30,26 @@ async def abrir_caja(
 ) -> AperturaCaja:
     """
     Open a new cash register shift.
-    Validates that no other apertura exists for the same turno and fecha.
+
+    Raises:
+        MajesaError: If there is already an open shift for this user and turn.
     """
-    existente = await caja_repo.get_apertura_by_turno_fecha(
-        data.turno, data.fecha, db
-    )
-    if existente:
-        raise MajesaError(
-            f"Ya existe una apertura para el turno '{data.turno}' "
-            f"en la fecha {data.fecha}",
-            409,
+    try:
+        apertura = AperturaCaja(
+            id_usuario=id_usuario,
+            turno=data.turno,
+            fecha=data.fecha,
+            monto_inicial=data.monto_inicial,
+            hora_apertura=datetime.utcnow(),
+            observaciones=data.observaciones
         )
+        result = await caja_repo.create_apertura(apertura, db)
+        await db.commit()
+        return result
+    except Exception:
+        await db.rollback()
+        raise
 
-    apertura = AperturaCaja(
-        id_usuario=id_usuario,
-        turno=data.turno,
-        fecha=data.fecha,
-        monto_inicial=data.monto_inicial,
-        hora_apertura=_now(),
-        observaciones=data.observaciones,
-    )
-    apertura = await caja_repo.create_apertura(apertura, db)
-    await db.commit()
-    return apertura
-
-
-async def get_apertura_activa(db: AsyncSession) -> AperturaCaja:
-    """Return the currently open (not yet closed) apertura."""
-    apertura = await caja_repo.get_apertura_activa_sin_cierre(db)
-    if not apertura:
-        raise MajesaError("No hay apertura de caja activa", 404)
-    return apertura
-
-
-# ── Cierre ────────────────────────────────────────────────────────────────────
 
 async def cerrar_caja(
     data: CierreCajaRequest,
@@ -74,9 +60,10 @@ async def cerrar_caja(
     Close the currently active cash register shift.
     Calculates expected totals from sales and compares with counted amounts.
     """
-    apertura = await caja_repo.get_apertura_activa_sin_cierre(db)
-    if not apertura:
-        raise MajesaError("No hay apertura de caja activa para cerrar", 404)
+    try:
+        apertura = await caja_repo.get_apertura_by_id(id_apertura, db)
+        if not apertura:
+            raise MajesaError("Apertura de caja no encontrada", 404)
 
     ya_cerrada = await caja_repo.get_cierre_by_apertura(
         apertura.id_apertura, db
@@ -122,16 +109,8 @@ async def cerrar_caja(
         )
         await caja_repo.create_cierre_detalle(detalle, db)
 
-    await db.commit()
-    return await caja_repo.get_cierre_by_id(cierre.id_cierre, db)
-
-
-async def get_cierres(db: AsyncSession) -> list[CierreCaja]:
-    return await caja_repo.get_cierres(db)
-
-
-async def get_cierre(db: AsyncSession, id_cierre: int) -> CierreCaja:
-    cierre = await caja_repo.get_cierre_by_id(id_cierre, db)
-    if not cierre:
-        raise MajesaError(f"Cierre {id_cierre} no encontrado", 404)
-    return cierre
+        await db.commit()
+        return cierre
+    except Exception:
+        await db.rollback()
+        raise
