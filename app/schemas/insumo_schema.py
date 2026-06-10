@@ -1,26 +1,32 @@
 """
 insumo_schema.py
-Schemas Pydantic para validación y serialización de insumos, subrecetas e ingredientes de subreceta.
-Autor: Ivan Ospino
-Issue: #19
+Pydantic schemas for Insumo, Subreceta, and SubrecetaIngrediente.
+Fields match model columns exactly.
 """
-
 from decimal import Decimal
 from datetime import datetime
-from typing import Optional, List
-from pydantic import BaseModel
+from typing import Optional
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ── Insumo ────────────────────────────────────────────────────────────────────
 
 class InsumoBase(BaseModel):
-    nombre: str
-    descripcion: Optional[str] = None
-    unidad_medida: str
-    stock_actual: Optional[Decimal] = Decimal("0")
-    umbral_minimo: Optional[Decimal] = Decimal("0")
-    costo_unitario: Optional[Decimal] = None
-    activo: Optional[bool] = True
+    nombre: str = Field(..., min_length=1, max_length=120)
+    presentacion: Optional[str] = Field(None, max_length=120)
+    id_unidad: int
+    id_clasificacion: int
+    id_marca: Optional[int] = None
+    contador_unidades: Optional[int] = None
+    precio: Optional[Decimal] = None
+    pct_rendimiento: Optional[Decimal] = None
+    umbral_minimo: Decimal = Decimal("0")
+    stock_minimo: Decimal = Decimal("0")
+    stock_maximo: Optional[Decimal] = None
+    punto_pedido: Optional[Decimal] = None
+    cantidad_a_pedir: Optional[Decimal] = None
+    dias_anticipacion: Optional[int] = None
+    activo: bool = True
 
 
 class InsumoCreate(InsumoBase):
@@ -28,32 +34,39 @@ class InsumoCreate(InsumoBase):
 
 
 class InsumoUpdate(BaseModel):
-    nombre: Optional[str] = None
-    descripcion: Optional[str] = None
-    unidad_medida: Optional[str] = None
-    stock_actual: Optional[Decimal] = None
+    nombre: Optional[str] = Field(None, min_length=1, max_length=120)
+    presentacion: Optional[str] = None
+    id_unidad: Optional[int] = None
+    id_clasificacion: Optional[int] = None
+    id_marca: Optional[int] = None
+    contador_unidades: Optional[int] = None
+    precio: Optional[Decimal] = None
+    pct_rendimiento: Optional[Decimal] = None
     umbral_minimo: Optional[Decimal] = None
-    costo_unitario: Optional[Decimal] = None
+    stock_minimo: Optional[Decimal] = None
+    stock_maximo: Optional[Decimal] = None
+    punto_pedido: Optional[Decimal] = None
+    cantidad_a_pedir: Optional[Decimal] = None
+    dias_anticipacion: Optional[int] = None
     activo: Optional[bool] = None
 
 
-class InsumoOut(InsumoBase):
+class InsumoResponse(InsumoBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id_insumo: int
     fecha_creacion: datetime
     fecha_actualizacion: datetime
-
-    class Config:
-        from_attributes = True
 
 
 # ── Subreceta ─────────────────────────────────────────────────────────────────
 
 class SubrecetaBase(BaseModel):
-    nombre: str
-    descripcion: Optional[str] = None
-    rendimiento: Optional[Decimal] = Decimal("1")
-    unidad_rendimiento: Optional[str] = "porcion"
-    activo: Optional[bool] = True
+    nombre: str = Field(..., min_length=1, max_length=120)
+    porciones: Optional[int] = None
+    peso_porcion_gr: Optional[Decimal] = None
+    costo_total: Optional[Decimal] = None
+    activo: bool = True
 
 
 class SubrecetaCreate(SubrecetaBase):
@@ -61,20 +74,17 @@ class SubrecetaCreate(SubrecetaBase):
 
 
 class SubrecetaUpdate(BaseModel):
-    nombre: Optional[str] = None
-    descripcion: Optional[str] = None
-    rendimiento: Optional[Decimal] = None
-    unidad_rendimiento: Optional[str] = None
+    nombre: Optional[str] = Field(None, min_length=1, max_length=120)
+    porciones: Optional[int] = None
+    peso_porcion_gr: Optional[Decimal] = None
+    costo_total: Optional[Decimal] = None
     activo: Optional[bool] = None
 
 
-class SubrecetaOut(SubrecetaBase):
-    id_subreceta: int
-    fecha_creacion: datetime
-    fecha_actualizacion: datetime
+class SubrecetaResponse(SubrecetaBase):
+    model_config = ConfigDict(from_attributes=True)
 
-    class Config:
-        from_attributes = True
+    id_subreceta: int
 
 
 # ── SubrecetaIngrediente ──────────────────────────────────────────────────────
@@ -82,7 +92,11 @@ class SubrecetaOut(SubrecetaBase):
 class SubrecetaIngredienteBase(BaseModel):
     id_subreceta: int
     id_insumo: int
-    cantidad: Decimal
+    id_unidad: int
+    cantidad: Decimal = Field(..., gt=0)
+    costo_unitario: Optional[Decimal] = None
+    costo_total: Optional[Decimal] = None
+    pct_participacion: Optional[Decimal] = None
 
 
 class SubrecetaIngredienteCreate(SubrecetaIngredienteBase):
@@ -90,11 +104,14 @@ class SubrecetaIngredienteCreate(SubrecetaIngredienteBase):
 
 
 class SubrecetaIngredienteUpdate(BaseModel):
-    cantidad: Decimal
+    id_unidad: Optional[int] = None
+    cantidad: Optional[Decimal] = Field(None, gt=0)
+    costo_unitario: Optional[Decimal] = None
+    costo_total: Optional[Decimal] = None
+    pct_participacion: Optional[Decimal] = None
 
 
-class SubrecetaIngredienteOut(SubrecetaIngredienteBase):
-    fecha_creacion: datetime
+class SubrecetaIngredienteResponse(SubrecetaIngredienteBase):
+    model_config = ConfigDict(from_attributes=True)
 
-    class Config:
-        from_attributes = True
+    id_subreceta_ing: int

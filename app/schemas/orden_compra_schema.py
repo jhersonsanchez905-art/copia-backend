@@ -1,82 +1,85 @@
 """
 orden_compra_schema.py
-Schemas Pydantic para validación y serialización de órdenes de compra y sus líneas de detalle.
+Schemas Pydantic para órdenes de compra y sus líneas de detalle.
 Autor: Ivan Ospino
-Issue: #20
+Issue: #21
 """
-
 from decimal import Decimal
 from datetime import datetime, date
+from enum import Enum
 from typing import Optional, List
-from pydantic import BaseModel
-from app.models.orden_compra import EstadoOrdenCompra
+from pydantic import BaseModel, ConfigDict
+
+
+class EstadoOrdenCompraEnum(str, Enum):
+    borrador = "borrador"
+    enviada = "enviada"
+    recibida = "recibida"
+    cancelada = "cancelada"
 
 
 # ── OrdenCompraDetalle ────────────────────────────────────────────────────────
 
-class OrdenCompraDetalleBase(BaseModel):
+class OrdenCompraDetalleCreate(BaseModel):
     id_insumo: int
     cantidad_solicitada: Decimal
     precio_unitario: Optional[Decimal] = Decimal("0")
     notas: Optional[str] = None
 
 
-class OrdenCompraDetalleCreate(OrdenCompraDetalleBase):
-    pass
+class OrdenCompraDetalleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
-
-class OrdenCompraDetalleUpdate(BaseModel):
-    cantidad_solicitada: Optional[Decimal] = None
-    cantidad_recibida: Optional[Decimal] = None
-    precio_unitario: Optional[Decimal] = None
-    notas: Optional[str] = None
-
-
-class OrdenCompraDetalleOut(OrdenCompraDetalleBase):
     id_detalle: int
     id_orden_compra: int
+    id_insumo: int
+    cantidad_solicitada: Decimal
     cantidad_recibida: Decimal
+    precio_unitario: Decimal
     subtotal_linea: Decimal
+    notas: Optional[str] = None
     fecha_creacion: datetime
     fecha_actualizacion: datetime
 
-    class Config:
-        from_attributes = True
+
+# ── Recepción ─────────────────────────────────────────────────────────────────
+
+class OrdenCompraRecibirDetalle(BaseModel):
+    id_insumo: int
+    cantidad_recibida: Decimal
+
+
+class OrdenCompraRecibir(BaseModel):
+    detalles: List[OrdenCompraRecibirDetalle]
 
 
 # ── OrdenCompra ───────────────────────────────────────────────────────────────
 
-class OrdenCompraBase(BaseModel):
+class OrdenCompraCreate(BaseModel):
     id_proveedor: Optional[int] = None
     id_usuario: Optional[int] = None
     numero_orden: str
     fecha_emision: Optional[date] = None
     fecha_entrega_esperada: Optional[date] = None
     notas: Optional[str] = None
-
-
-class OrdenCompraCreate(OrdenCompraBase):
     detalles: Optional[List[OrdenCompraDetalleCreate]] = []
 
 
-class OrdenCompraUpdate(BaseModel):
+class OrdenCompraOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id_orden_compra: int
     id_proveedor: Optional[int] = None
+    id_usuario: Optional[int] = None
+    numero_orden: str
+    fecha_emision: Optional[date] = None
     fecha_entrega_esperada: Optional[date] = None
     fecha_recepcion_real: Optional[date] = None
-    estado: Optional[EstadoOrdenCompra] = None
-    notas: Optional[str] = None
-
-
-class OrdenCompraOut(OrdenCompraBase):
-    id_orden_compra: int
-    fecha_recepcion_real: Optional[date] = None
-    estado: EstadoOrdenCompra
+    estado: EstadoOrdenCompraEnum
     subtotal: Decimal
     impuestos: Decimal
     total: Decimal
+    notas: Optional[str] = None
     fecha_creacion: datetime
     fecha_actualizacion: datetime
     detalles: List[OrdenCompraDetalleOut] = []
-
-    class Config:
-        from_attributes = True

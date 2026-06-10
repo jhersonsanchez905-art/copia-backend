@@ -1,15 +1,16 @@
 """
-app/schemas/caja_schema.py
+caja_schema.py
+Pydantic schemas for cash register module: apertura, cierre, and cierre detalle.
 
-Pydantic schemas for cash register module request and response validation.
-
-Author: Suley Suarez
-Issue: #16
+Author: Suley Suarez / Jherson
+Issue: #16, #40
 """
-from pydantic import BaseModel
-from typing import Optional, List
-from datetime import datetime, date
+from datetime import date, datetime
+from decimal import Decimal
 from enum import Enum
+from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict
 
 
 class TurnoEnum(str, Enum):
@@ -20,65 +21,57 @@ class TurnoEnum(str, Enum):
 # ── Apertura Caja ─────────────────────────────────────────────────────────────
 
 class AperturaCajaRequest(BaseModel):
-    """Request schema to open a cash register shift."""
     turno: TurnoEnum
     fecha: date
-    monto_inicial: float
+    monto_inicial: Decimal
     observaciones: Optional[str] = None
 
 
 class AperturaCajaResponse(BaseModel):
-    """Cash register opening response."""
+    model_config = ConfigDict(from_attributes=True)
+
     id_apertura: int
     id_usuario: int
     turno: str
     fecha: date
-    monto_inicial: float
+    monto_inicial: Decimal
     hora_apertura: datetime
     observaciones: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 # ── Cierre Caja ───────────────────────────────────────────────────────────────
 
 class CierreCajaDetalleRequest(BaseModel):
-    """Payment method breakdown for cash register closing."""
     id_metodo_pago: int
-    total_contado: float
+    total_contado: Decimal
 
 
 class CierreCajaRequest(BaseModel):
-    """Request schema to close a cash register shift."""
     observaciones: Optional[str] = None
     detalle: List[CierreCajaDetalleRequest]
 
 
 class CierreCajaDetalleResponse(BaseModel):
-    """Payment method detail in cash register closing response."""
-    id_metodo_pago: int
-    total_esperado: float
-    total_contado: float
-    diferencia: float
+    model_config = ConfigDict(from_attributes=True)
 
-    class Config:
-        from_attributes = True
+    id_detalle: int
+    id_metodo_pago: int
+    total_esperado: Decimal
+    total_contado: Decimal
+    diferencia: Decimal
 
 
 class CierreCajaResponse(BaseModel):
-    """Cash register closing response."""
+    model_config = ConfigDict(from_attributes=True)
+
     id_cierre: int
     id_apertura: int
     id_usuario: int
     turno: str
     fecha: date
-    total_general: float
-    total_transacciones: float
-    diferencia: float
+    total_general: Decimal
+    total_transacciones: Decimal
+    diferencia: Decimal
     hora_cierre: datetime
     observaciones: Optional[str] = None
-    detalle: List[CierreCajaDetalleResponse] = []
-
-    class Config:
-        from_attributes = True
+    detalles: List[CierreCajaDetalleResponse] = []

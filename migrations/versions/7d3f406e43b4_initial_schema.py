@@ -1,14 +1,14 @@
-"""initial migration full model
+"""initial_schema
 
-Revision ID: 01c5c2c4763d
+Revision ID: 7d3f406e43b4
 Revises: 
-Create Date: 2026-06-02 02:46:30.917284
+Create Date: 2026-06-07 11:10:59.309845
 """
 from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = '01c5c2c4763d'
+revision = '7d3f406e43b4'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -68,6 +68,18 @@ def upgrade() -> None:
     schema='pos'
     )
     op.create_index(op.f('ix_pos_marca_id_marca'), 'marca', ['id_marca'], unique=False, schema='pos')
+    op.create_table('mesa',
+    sa.Column('id_mesa', sa.Integer(), nullable=False),
+    sa.Column('numero', sa.String(length=10), nullable=False),
+    sa.Column('capacidad', sa.Integer(), nullable=False),
+    sa.Column('zona', sa.String(length=60), nullable=True),
+    sa.Column('estado', sa.String(length=20), nullable=False),
+    sa.Column('activo', sa.Boolean(), nullable=False),
+    sa.PrimaryKeyConstraint('id_mesa'),
+    sa.UniqueConstraint('numero'),
+    schema='pos'
+    )
+    op.create_index(op.f('ix_pos_mesa_id_mesa'), 'mesa', ['id_mesa'], unique=False, schema='pos')
     op.create_table('metodo_pago',
     sa.Column('id_metodo_pago', sa.Integer(), nullable=False),
     sa.Column('nombre', sa.String(), nullable=False),
@@ -96,15 +108,26 @@ def upgrade() -> None:
     schema='pos'
     )
     op.create_index(op.f('ix_pos_rol_id_rol'), 'rol', ['id_rol'], unique=False, schema='pos')
+    op.create_table('servicio_adicional',
+    sa.Column('id_servicio', sa.Integer(), nullable=False),
+    sa.Column('nombre', sa.String(length=120), nullable=False),
+    sa.Column('descripcion', sa.String(), nullable=True),
+    sa.Column('valor', sa.Numeric(precision=14, scale=2), nullable=False),
+    sa.Column('activo', sa.Boolean(), nullable=False),
+    sa.PrimaryKeyConstraint('id_servicio'),
+    sa.UniqueConstraint('nombre'),
+    schema='pos'
+    )
+    op.create_index(op.f('ix_pos_servicio_adicional_id_servicio'), 'servicio_adicional', ['id_servicio'], unique=False, schema='pos')
     op.create_table('subreceta',
     sa.Column('id_subreceta', sa.Integer(), nullable=False),
-    sa.Column('nombre', sa.String(), nullable=False),
+    sa.Column('nombre', sa.String(length=120), nullable=False),
     sa.Column('porciones', sa.Integer(), nullable=True),
     sa.Column('peso_porcion_gr', sa.Numeric(precision=12, scale=4), nullable=True),
     sa.Column('costo_total', sa.Numeric(precision=14, scale=4), nullable=True),
-    sa.Column('stock_actual', sa.Numeric(precision=12, scale=4), nullable=True),
-    sa.Column('activo', sa.Boolean(), nullable=True),
+    sa.Column('activo', sa.Boolean(), nullable=False),
     sa.PrimaryKeyConstraint('id_subreceta'),
+    sa.UniqueConstraint('nombre'),
     schema='pos'
     )
     op.create_index(op.f('ix_pos_subreceta_id_subreceta'), 'subreceta', ['id_subreceta'], unique=False, schema='pos')
@@ -118,25 +141,25 @@ def upgrade() -> None:
     op.create_index(op.f('ix_pos_unidad_medida_id_unidad'), 'unidad_medida', ['id_unidad'], unique=False, schema='pos')
     op.create_table('insumo',
     sa.Column('id_insumo', sa.Integer(), nullable=False),
-    sa.Column('nombre', sa.String(), nullable=False),
-    sa.Column('presentacion', sa.String(), nullable=True),
+    sa.Column('nombre', sa.String(length=120), nullable=False),
+    sa.Column('presentacion', sa.String(length=120), nullable=True),
     sa.Column('id_unidad', sa.Integer(), nullable=False),
     sa.Column('id_clasificacion', sa.Integer(), nullable=False),
-    sa.Column('id_proveedor', sa.Integer(), nullable=False),
     sa.Column('id_marca', sa.Integer(), nullable=True),
     sa.Column('contador_unidades', sa.Integer(), nullable=True),
     sa.Column('precio', sa.Numeric(precision=14, scale=4), nullable=True),
     sa.Column('pct_rendimiento', sa.Numeric(precision=5, scale=2), nullable=True),
-    sa.Column('precio_real', sa.Numeric(precision=14, scale=4), nullable=True),
-    sa.Column('precio_por_udm', sa.Numeric(precision=14, scale=4), nullable=True),
-    sa.Column('stock_actual', sa.Numeric(precision=12, scale=4), nullable=True),
-    sa.Column('umbral_minimo', sa.Numeric(precision=12, scale=4), nullable=True),
-    sa.Column('activo', sa.Boolean(), nullable=True),
-    sa.Column('fecha_creacion', sa.DateTime(), nullable=True),
-    sa.Column('fecha_actualizacion', sa.DateTime(), nullable=True),
+    sa.Column('umbral_minimo', sa.Numeric(precision=12, scale=4), nullable=False),
+    sa.Column('stock_minimo', sa.Numeric(precision=12, scale=4), nullable=False),
+    sa.Column('stock_maximo', sa.Numeric(precision=12, scale=4), nullable=True),
+    sa.Column('punto_pedido', sa.Numeric(precision=12, scale=4), nullable=True),
+    sa.Column('cantidad_a_pedir', sa.Numeric(precision=12, scale=4), nullable=True),
+    sa.Column('dias_anticipacion', sa.Integer(), nullable=True),
+    sa.Column('activo', sa.Boolean(), nullable=False),
+    sa.Column('fecha_creacion', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('fecha_actualizacion', sa.DateTime(timezone=True), nullable=False),
     sa.ForeignKeyConstraint(['id_clasificacion'], ['pos.clasificacion.id_clasificacion'], ),
     sa.ForeignKeyConstraint(['id_marca'], ['pos.marca.id_marca'], ),
-    sa.ForeignKeyConstraint(['id_proveedor'], ['pos.proveedor.id_proveedor'], ),
     sa.ForeignKeyConstraint(['id_unidad'], ['pos.unidad_medida.id_unidad'], ),
     sa.PrimaryKeyConstraint('id_insumo'),
     sa.UniqueConstraint('nombre'),
@@ -190,6 +213,24 @@ def upgrade() -> None:
     schema='mkt'
     )
     op.create_index(op.f('ix_mkt_campana_id_campana'), 'campana', ['id_campana'], unique=False, schema='mkt')
+    op.create_table('ajuste_inventario',
+    sa.Column('id_ajuste', sa.Integer(), nullable=False),
+    sa.Column('id_insumo', sa.Integer(), nullable=False),
+    sa.Column('id_usuario_solicita', sa.Integer(), nullable=False),
+    sa.Column('id_usuario_aprueba', sa.Integer(), nullable=True),
+    sa.Column('cantidad', sa.Numeric(precision=12, scale=4), nullable=False),
+    sa.Column('motivo', sa.String(), nullable=False),
+    sa.Column('observacion', sa.String(), nullable=True),
+    sa.Column('estado', sa.String(length=20), nullable=False),
+    sa.Column('fecha_solicitud', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('fecha_resolucion', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['id_insumo'], ['pos.insumo.id_insumo'], ),
+    sa.ForeignKeyConstraint(['id_usuario_aprueba'], ['pos.usuario.id_usuario'], ),
+    sa.ForeignKeyConstraint(['id_usuario_solicita'], ['pos.usuario.id_usuario'], ),
+    sa.PrimaryKeyConstraint('id_ajuste'),
+    schema='pos'
+    )
+    op.create_index(op.f('ix_pos_ajuste_inventario_id_ajuste'), 'ajuste_inventario', ['id_ajuste'], unique=False, schema='pos')
     op.create_table('apertura_caja',
     sa.Column('id_apertura', sa.Integer(), nullable=False),
     sa.Column('id_usuario', sa.Integer(), nullable=False),
@@ -203,6 +244,23 @@ def upgrade() -> None:
     schema='pos'
     )
     op.create_index(op.f('ix_pos_apertura_caja_id_apertura'), 'apertura_caja', ['id_apertura'], unique=False, schema='pos')
+    op.create_table('auditoria',
+    sa.Column('id_auditoria', sa.Integer(), nullable=False),
+    sa.Column('id_usuario', sa.Integer(), nullable=True),
+    sa.Column('entidad', sa.String(length=60), nullable=False),
+    sa.Column('id_registro', sa.Integer(), nullable=True),
+    sa.Column('accion', sa.String(length=20), nullable=False),
+    sa.Column('estado', sa.String(length=20), nullable=False),
+    sa.Column('descripcion', sa.String(), nullable=True),
+    sa.Column('payload', sa.JSON(), nullable=True),
+    sa.Column('ip', sa.String(length=45), nullable=True),
+    sa.Column('user_agent', sa.String(length=255), nullable=True),
+    sa.Column('fecha', sa.DateTime(timezone=True), nullable=False),
+    sa.ForeignKeyConstraint(['id_usuario'], ['pos.usuario.id_usuario'], ),
+    sa.PrimaryKeyConstraint('id_auditoria'),
+    schema='pos'
+    )
+    op.create_index(op.f('ix_pos_auditoria_id_auditoria'), 'auditoria', ['id_auditoria'], unique=False, schema='pos')
     op.create_table('insumo_proveedor',
     sa.Column('id_insumo_proveedor', sa.Integer(), nullable=False),
     sa.Column('id_insumo', sa.Integer(), nullable=False),
@@ -224,13 +282,13 @@ def upgrade() -> None:
     sa.Column('fecha_emision', sa.Date(), nullable=True),
     sa.Column('fecha_entrega_esperada', sa.Date(), nullable=True),
     sa.Column('fecha_recepcion_real', sa.Date(), nullable=True),
-    sa.Column('estado', sa.Enum('BORRADOR', 'ENVIADA', 'RECIBIDA_PARCIAL', 'RECIBIDA_TOTAL', 'CANCELADA', name='estadoordencompra'), nullable=True),
+    sa.Column('estado', sa.Enum('borrador', 'enviada', 'recibida', 'cancelada', name='estadoordencompra'), nullable=False),
     sa.Column('subtotal', sa.Numeric(precision=16, scale=2), nullable=True),
     sa.Column('impuestos', sa.Numeric(precision=16, scale=2), nullable=True),
     sa.Column('total', sa.Numeric(precision=16, scale=2), nullable=True),
     sa.Column('notas', sa.Text(), nullable=True),
-    sa.Column('fecha_creacion', sa.DateTime(), nullable=True),
-    sa.Column('fecha_actualizacion', sa.DateTime(), nullable=True),
+    sa.Column('fecha_creacion', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('fecha_actualizacion', sa.DateTime(timezone=True), nullable=True),
     sa.ForeignKeyConstraint(['id_proveedor'], ['pos.proveedor.id_proveedor'], ),
     sa.ForeignKeyConstraint(['id_usuario'], ['pos.usuario.id_usuario'], ),
     sa.PrimaryKeyConstraint('id_orden_compra'),
@@ -243,8 +301,8 @@ def upgrade() -> None:
     sa.Column('id_producto', sa.Integer(), nullable=False),
     sa.Column('version', sa.Integer(), nullable=False),
     sa.Column('vigente', sa.Boolean(), nullable=True),
-    sa.Column('fecha_creacion', sa.DateTime(), nullable=True),
-    sa.Column('costo_total', sa.Numeric(), nullable=True),
+    sa.Column('fecha_creacion', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('costo_total', sa.Numeric(precision=14, scale=4), nullable=True),
     sa.Column('tiempo_preparacion_min', sa.Integer(), nullable=True),
     sa.Column('instrucciones_generales', sa.String(), nullable=True),
     sa.Column('observaciones', sa.String(), nullable=True),
@@ -253,12 +311,41 @@ def upgrade() -> None:
     schema='pos'
     )
     op.create_index(op.f('ix_pos_receta_version_id_receta_version'), 'receta_version', ['id_receta_version'], unique=False, schema='pos')
+    op.create_table('reserva',
+    sa.Column('id_reserva', sa.Integer(), nullable=False),
+    sa.Column('id_mesa', sa.Integer(), nullable=False),
+    sa.Column('id_cliente', sa.Integer(), nullable=True),
+    sa.Column('id_usuario', sa.Integer(), nullable=False),
+    sa.Column('fecha_hora', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('num_personas', sa.Integer(), nullable=False),
+    sa.Column('estado', sa.String(length=20), nullable=False),
+    sa.Column('observaciones', sa.String(), nullable=True),
+    sa.Column('fecha_creacion', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['id_cliente'], ['pos.cliente.id_cliente'], ),
+    sa.ForeignKeyConstraint(['id_mesa'], ['pos.mesa.id_mesa'], ),
+    sa.ForeignKeyConstraint(['id_usuario'], ['pos.usuario.id_usuario'], ),
+    sa.PrimaryKeyConstraint('id_reserva'),
+    schema='pos'
+    )
+    op.create_index(op.f('ix_pos_reserva_id_reserva'), 'reserva', ['id_reserva'], unique=False, schema='pos')
+    op.create_table('stock',
+    sa.Column('id_stock', sa.Integer(), nullable=False),
+    sa.Column('id_insumo', sa.Integer(), nullable=False),
+    sa.Column('cantidad', sa.Numeric(precision=12, scale=4), nullable=False),
+    sa.Column('semaforo', sa.String(length=10), nullable=False),
+    sa.Column('ultima_actualizacion', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['id_insumo'], ['pos.insumo.id_insumo'], ),
+    sa.PrimaryKeyConstraint('id_stock'),
+    sa.UniqueConstraint('id_insumo'),
+    schema='pos'
+    )
+    op.create_index(op.f('ix_pos_stock_id_stock'), 'stock', ['id_stock'], unique=False, schema='pos')
     op.create_table('subreceta_ingrediente',
     sa.Column('id_subreceta_ing', sa.Integer(), nullable=False),
-    sa.Column('id_subreceta', sa.Integer(), nullable=True),
-    sa.Column('id_insumo', sa.Integer(), nullable=True),
-    sa.Column('id_unidad', sa.Integer(), nullable=True),
-    sa.Column('cantidad', sa.Numeric(precision=14, scale=4), nullable=True),
+    sa.Column('id_subreceta', sa.Integer(), nullable=False),
+    sa.Column('id_insumo', sa.Integer(), nullable=False),
+    sa.Column('id_unidad', sa.Integer(), nullable=False),
+    sa.Column('cantidad', sa.Numeric(precision=12, scale=4), nullable=False),
     sa.Column('costo_unitario', sa.Numeric(precision=14, scale=4), nullable=True),
     sa.Column('costo_total', sa.Numeric(precision=14, scale=4), nullable=True),
     sa.Column('pct_participacion', sa.Numeric(precision=5, scale=2), nullable=True),
@@ -269,20 +356,6 @@ def upgrade() -> None:
     schema='pos'
     )
     op.create_index(op.f('ix_pos_subreceta_ingrediente_id_subreceta_ing'), 'subreceta_ingrediente', ['id_subreceta_ing'], unique=False, schema='pos')
-    op.create_table('venta',
-    sa.Column('id_venta', sa.Integer(), nullable=False),
-    sa.Column('fecha', sa.DateTime(), nullable=False),
-    sa.Column('id_usuario', sa.Integer(), nullable=False),
-    sa.Column('id_cliente', sa.Integer(), nullable=True),
-    sa.Column('subtotal', sa.Numeric(precision=16, scale=2), nullable=False),
-    sa.Column('total', sa.Numeric(precision=16, scale=2), nullable=False),
-    sa.Column('estado', sa.String(), nullable=False),
-    sa.ForeignKeyConstraint(['id_cliente'], ['pos.cliente.id_cliente'], ),
-    sa.ForeignKeyConstraint(['id_usuario'], ['pos.usuario.id_usuario'], ),
-    sa.PrimaryKeyConstraint('id_venta'),
-    schema='pos'
-    )
-    op.create_index(op.f('ix_pos_venta_id_venta'), 'venta', ['id_venta'], unique=False, schema='pos')
     op.create_table('campana_canal',
     sa.Column('id_campana', sa.Integer(), nullable=False),
     sa.Column('id_canal', sa.Integer(), nullable=False),
@@ -304,18 +377,35 @@ def upgrade() -> None:
     op.create_table('alerta',
     sa.Column('id_alerta', sa.Integer(), nullable=False),
     sa.Column('id_insumo', sa.Integer(), nullable=False),
-    sa.Column('estado', sa.String(), nullable=True),
-    sa.Column('semaforo', sa.String(), nullable=True),
-    sa.Column('cantidad_a_pedir', sa.Numeric(), nullable=True),
+    sa.Column('tipo', sa.String(length=20), nullable=False),
+    sa.Column('estado', sa.String(length=20), nullable=False),
+    sa.Column('semaforo', sa.String(length=10), nullable=False),
+    sa.Column('cantidad_a_pedir', sa.Numeric(precision=12, scale=4), nullable=True),
     sa.Column('id_orden_compra', sa.Integer(), nullable=True),
-    sa.Column('fecha_creacion', sa.DateTime(), nullable=True),
-    sa.Column('fecha_resolucion', sa.DateTime(), nullable=True),
+    sa.Column('fecha_creacion', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('fecha_resolucion', sa.DateTime(timezone=True), nullable=True),
     sa.ForeignKeyConstraint(['id_insumo'], ['pos.insumo.id_insumo'], ),
     sa.ForeignKeyConstraint(['id_orden_compra'], ['pos.orden_compra.id_orden_compra'], ),
     sa.PrimaryKeyConstraint('id_alerta'),
     schema='pos'
     )
     op.create_index(op.f('ix_pos_alerta_id_alerta'), 'alerta', ['id_alerta'], unique=False, schema='pos')
+    op.create_table('alerta_perecible',
+    sa.Column('id_alerta_perecible', sa.Integer(), nullable=False),
+    sa.Column('id_insumo', sa.Integer(), nullable=False),
+    sa.Column('id_stock', sa.Integer(), nullable=False),
+    sa.Column('fecha_ingreso', sa.Date(), nullable=False),
+    sa.Column('dias_en_inventario', sa.Integer(), nullable=False),
+    sa.Column('estado', sa.String(length=20), nullable=False),
+    sa.Column('accion_sugerida', sa.String(), nullable=True),
+    sa.Column('fecha_creacion', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('fecha_resolucion', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['id_insumo'], ['pos.insumo.id_insumo'], ),
+    sa.ForeignKeyConstraint(['id_stock'], ['pos.stock.id_stock'], ),
+    sa.PrimaryKeyConstraint('id_alerta_perecible'),
+    schema='pos'
+    )
+    op.create_index(op.f('ix_pos_alerta_perecible_id_alerta_perecible'), 'alerta_perecible', ['id_alerta_perecible'], unique=False, schema='pos')
     op.create_table('cierre_caja',
     sa.Column('id_cierre', sa.Integer(), nullable=False),
     sa.Column('id_apertura', sa.Integer(), nullable=False),
@@ -334,11 +424,149 @@ def upgrade() -> None:
     schema='pos'
     )
     op.create_index(op.f('ix_pos_cierre_caja_id_cierre'), 'cierre_caja', ['id_cierre'], unique=False, schema='pos')
+    op.create_table('orden_compra_detalle',
+    sa.Column('id_detalle', sa.Integer(), nullable=False),
+    sa.Column('id_orden_compra', sa.Integer(), nullable=False),
+    sa.Column('id_insumo', sa.Integer(), nullable=False),
+    sa.Column('cantidad_solicitada', sa.Numeric(precision=12, scale=4), nullable=False),
+    sa.Column('cantidad_recibida', sa.Numeric(precision=12, scale=4), nullable=True),
+    sa.Column('precio_unitario', sa.Numeric(precision=14, scale=4), nullable=True),
+    sa.Column('subtotal_linea', sa.Numeric(precision=16, scale=2), nullable=True),
+    sa.Column('notas', sa.Text(), nullable=True),
+    sa.Column('fecha_creacion', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('fecha_actualizacion', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['id_insumo'], ['pos.insumo.id_insumo'], ),
+    sa.ForeignKeyConstraint(['id_orden_compra'], ['pos.orden_compra.id_orden_compra'], ),
+    sa.PrimaryKeyConstraint('id_detalle'),
+    schema='pos'
+    )
+    op.create_index(op.f('ix_pos_orden_compra_detalle_id_detalle'), 'orden_compra_detalle', ['id_detalle'], unique=False, schema='pos')
+    op.create_table('pedido',
+    sa.Column('id_pedido', sa.Integer(), nullable=False),
+    sa.Column('id_mesa', sa.Integer(), nullable=False),
+    sa.Column('id_usuario', sa.Integer(), nullable=False),
+    sa.Column('id_reserva', sa.Integer(), nullable=True),
+    sa.Column('fecha_hora', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('estado', sa.String(length=20), nullable=False),
+    sa.Column('observaciones', sa.String(), nullable=True),
+    sa.ForeignKeyConstraint(['id_mesa'], ['pos.mesa.id_mesa'], ),
+    sa.ForeignKeyConstraint(['id_reserva'], ['pos.reserva.id_reserva'], ),
+    sa.ForeignKeyConstraint(['id_usuario'], ['pos.usuario.id_usuario'], ),
+    sa.PrimaryKeyConstraint('id_pedido'),
+    schema='pos'
+    )
+    op.create_index(op.f('ix_pos_pedido_id_pedido'), 'pedido', ['id_pedido'], unique=False, schema='pos')
+    op.create_table('receta_detalle_insumo',
+    sa.Column('id_receta_detalle_insumo', sa.Integer(), nullable=False),
+    sa.Column('id_receta_version', sa.Integer(), nullable=False),
+    sa.Column('id_insumo', sa.Integer(), nullable=False),
+    sa.Column('id_unidad', sa.Integer(), nullable=False),
+    sa.Column('cantidad', sa.Numeric(precision=12, scale=4), nullable=False),
+    sa.Column('costo_unitario', sa.Numeric(precision=14, scale=4), nullable=True),
+    sa.Column('costo_total', sa.Numeric(precision=14, scale=4), nullable=True),
+    sa.Column('pct_participacion', sa.Numeric(precision=5, scale=2), nullable=True),
+    sa.ForeignKeyConstraint(['id_insumo'], ['pos.insumo.id_insumo'], ),
+    sa.ForeignKeyConstraint(['id_receta_version'], ['pos.receta_version.id_receta_version'], ),
+    sa.ForeignKeyConstraint(['id_unidad'], ['pos.unidad_medida.id_unidad'], ),
+    sa.PrimaryKeyConstraint('id_receta_detalle_insumo'),
+    schema='pos'
+    )
+    op.create_index(op.f('ix_pos_receta_detalle_insumo_id_receta_detalle_insumo'), 'receta_detalle_insumo', ['id_receta_detalle_insumo'], unique=False, schema='pos')
+    op.create_table('receta_detalle_subreceta',
+    sa.Column('id_receta_detalle_subreceta', sa.Integer(), nullable=False),
+    sa.Column('id_receta_version', sa.Integer(), nullable=False),
+    sa.Column('id_subreceta', sa.Integer(), nullable=False),
+    sa.Column('id_unidad', sa.Integer(), nullable=False),
+    sa.Column('cantidad', sa.Numeric(precision=12, scale=4), nullable=False),
+    sa.Column('costo_unitario', sa.Numeric(precision=14, scale=4), nullable=True),
+    sa.Column('costo_total', sa.Numeric(precision=14, scale=4), nullable=True),
+    sa.Column('pct_participacion', sa.Numeric(precision=5, scale=2), nullable=True),
+    sa.ForeignKeyConstraint(['id_receta_version'], ['pos.receta_version.id_receta_version'], ),
+    sa.ForeignKeyConstraint(['id_subreceta'], ['pos.subreceta.id_subreceta'], ),
+    sa.ForeignKeyConstraint(['id_unidad'], ['pos.unidad_medida.id_unidad'], ),
+    sa.PrimaryKeyConstraint('id_receta_detalle_subreceta'),
+    schema='pos'
+    )
+    op.create_index(op.f('ix_pos_receta_detalle_subreceta_id_receta_detalle_subreceta'), 'receta_detalle_subreceta', ['id_receta_detalle_subreceta'], unique=False, schema='pos')
+    op.create_table('receta_paso',
+    sa.Column('id_paso', sa.Integer(), nullable=False),
+    sa.Column('id_receta_version', sa.Integer(), nullable=False),
+    sa.Column('numero_paso', sa.Integer(), nullable=False),
+    sa.Column('titulo', sa.String(), nullable=False),
+    sa.Column('descripcion', sa.String(), nullable=True),
+    sa.Column('tiempo_estimado_min', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['id_receta_version'], ['pos.receta_version.id_receta_version'], ),
+    sa.PrimaryKeyConstraint('id_paso'),
+    schema='pos'
+    )
+    op.create_index(op.f('ix_pos_receta_paso_id_paso'), 'receta_paso', ['id_paso'], unique=False, schema='pos')
+    op.create_table('cierre_caja_detalle',
+    sa.Column('id_detalle', sa.Integer(), nullable=False),
+    sa.Column('id_cierre', sa.Integer(), nullable=False),
+    sa.Column('id_metodo_pago', sa.Integer(), nullable=False),
+    sa.Column('total_esperado', sa.Numeric(), nullable=True),
+    sa.Column('total_contado', sa.Numeric(), nullable=True),
+    sa.Column('diferencia', sa.Numeric(), nullable=True),
+    sa.ForeignKeyConstraint(['id_cierre'], ['pos.cierre_caja.id_cierre'], ),
+    sa.ForeignKeyConstraint(['id_metodo_pago'], ['pos.metodo_pago.id_metodo_pago'], ),
+    sa.PrimaryKeyConstraint('id_detalle'),
+    schema='pos'
+    )
+    op.create_index(op.f('ix_pos_cierre_caja_detalle_id_detalle'), 'cierre_caja_detalle', ['id_detalle'], unique=False, schema='pos')
+    op.create_table('pedido_item',
+    sa.Column('id_pedido_item', sa.Integer(), nullable=False),
+    sa.Column('id_pedido', sa.Integer(), nullable=False),
+    sa.Column('id_producto', sa.Integer(), nullable=False),
+    sa.Column('cantidad', sa.Integer(), nullable=False),
+    sa.Column('precio_unitario', sa.Numeric(precision=14, scale=2), nullable=False),
+    sa.Column('subtotal', sa.Numeric(precision=14, scale=2), nullable=False),
+    sa.Column('observaciones', sa.String(), nullable=True),
+    sa.Column('estado', sa.String(length=20), nullable=False),
+    sa.ForeignKeyConstraint(['id_pedido'], ['pos.pedido.id_pedido'], ),
+    sa.ForeignKeyConstraint(['id_producto'], ['pos.producto.id_producto'], ),
+    sa.PrimaryKeyConstraint('id_pedido_item'),
+    schema='pos'
+    )
+    op.create_index(op.f('ix_pos_pedido_item_id_pedido_item'), 'pedido_item', ['id_pedido_item'], unique=False, schema='pos')
+    op.create_table('pedido_servicio',
+    sa.Column('id_pedido_servicio', sa.Integer(), nullable=False),
+    sa.Column('id_pedido', sa.Integer(), nullable=False),
+    sa.Column('id_servicio', sa.Integer(), nullable=False),
+    sa.Column('cantidad', sa.Integer(), nullable=False),
+    sa.Column('valor_unitario', sa.Numeric(precision=14, scale=2), nullable=False),
+    sa.Column('subtotal', sa.Numeric(precision=14, scale=2), nullable=False),
+    sa.Column('observaciones', sa.String(), nullable=True),
+    sa.ForeignKeyConstraint(['id_pedido'], ['pos.pedido.id_pedido'], ),
+    sa.ForeignKeyConstraint(['id_servicio'], ['pos.servicio_adicional.id_servicio'], ),
+    sa.PrimaryKeyConstraint('id_pedido_servicio'),
+    schema='pos'
+    )
+    op.create_index(op.f('ix_pos_pedido_servicio_id_pedido_servicio'), 'pedido_servicio', ['id_pedido_servicio'], unique=False, schema='pos')
+    op.create_table('venta',
+    sa.Column('id_venta', sa.Integer(), nullable=False),
+    sa.Column('id_apertura', sa.Integer(), nullable=False),
+    sa.Column('id_pedido', sa.Integer(), nullable=False),
+    sa.Column('id_usuario', sa.Integer(), nullable=False),
+    sa.Column('id_cliente', sa.Integer(), nullable=True),
+    sa.Column('turno', sa.String(length=20), nullable=False),
+    sa.Column('fecha', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('subtotal', sa.Numeric(precision=16, scale=2), nullable=False),
+    sa.Column('total', sa.Numeric(precision=16, scale=2), nullable=False),
+    sa.Column('estado', sa.String(length=20), nullable=False),
+    sa.ForeignKeyConstraint(['id_apertura'], ['pos.apertura_caja.id_apertura'], ),
+    sa.ForeignKeyConstraint(['id_cliente'], ['pos.cliente.id_cliente'], ),
+    sa.ForeignKeyConstraint(['id_pedido'], ['pos.pedido.id_pedido'], ),
+    sa.ForeignKeyConstraint(['id_usuario'], ['pos.usuario.id_usuario'], ),
+    sa.PrimaryKeyConstraint('id_venta'),
+    sa.UniqueConstraint('id_pedido'),
+    schema='pos'
+    )
+    op.create_index(op.f('ix_pos_venta_id_venta'), 'venta', ['id_venta'], unique=False, schema='pos')
     op.create_table('factura',
     sa.Column('id_factura', sa.Integer(), nullable=False),
     sa.Column('id_venta', sa.Integer(), nullable=False),
     sa.Column('numero', sa.String(), nullable=False),
-    sa.Column('fecha_emision', sa.DateTime(), nullable=True),
+    sa.Column('fecha_emision', sa.DateTime(timezone=True), nullable=True),
     sa.Column('total', sa.Numeric(precision=16, scale=2), nullable=False),
     sa.Column('url_pdf', sa.String(), nullable=True),
     sa.ForeignKeyConstraint(['id_venta'], ['pos.venta.id_venta'], ),
@@ -366,112 +594,55 @@ def upgrade() -> None:
     op.create_index(op.f('ix_pos_item_venta_id_item_venta'), 'item_venta', ['id_item_venta'], unique=False, schema='pos')
     op.create_table('movimiento_inventario',
     sa.Column('id_movimiento', sa.Integer(), nullable=False),
-    sa.Column('id_insumo', sa.Integer(), nullable=True),
-    sa.Column('id_subreceta', sa.Integer(), nullable=True),
-    sa.Column('tipo', sa.String(), nullable=False),
-    sa.Column('cantidad', sa.Numeric(), nullable=False),
+    sa.Column('id_insumo', sa.Integer(), nullable=False),
+    sa.Column('tipo', sa.String(length=20), nullable=False),
+    sa.Column('cantidad', sa.Numeric(precision=12, scale=4), nullable=False),
+    sa.Column('cantidad_anterior', sa.Numeric(precision=12, scale=4), nullable=False),
+    sa.Column('cantidad_nueva', sa.Numeric(precision=12, scale=4), nullable=False),
     sa.Column('motivo', sa.String(), nullable=True),
     sa.Column('observacion', sa.String(), nullable=True),
-    sa.Column('afecta_stock', sa.Boolean(), nullable=True),
-    sa.Column('cantidad_anterior', sa.Numeric(), nullable=True),
-    sa.Column('cantidad_nueva', sa.Numeric(), nullable=True),
-    sa.Column('estado', sa.String(), nullable=True),
     sa.Column('id_venta', sa.Integer(), nullable=True),
     sa.Column('id_orden_compra', sa.Integer(), nullable=True),
     sa.Column('id_usuario', sa.Integer(), nullable=False),
-    sa.Column('id_aprobador', sa.Integer(), nullable=True),
-    sa.Column('fecha', sa.DateTime(), nullable=True),
-    sa.ForeignKeyConstraint(['id_aprobador'], ['pos.usuario.id_usuario'], ),
+    sa.Column('fecha', sa.DateTime(timezone=True), nullable=False),
     sa.ForeignKeyConstraint(['id_insumo'], ['pos.insumo.id_insumo'], ),
     sa.ForeignKeyConstraint(['id_orden_compra'], ['pos.orden_compra.id_orden_compra'], ),
-    sa.ForeignKeyConstraint(['id_subreceta'], ['pos.subreceta.id_subreceta'], ),
     sa.ForeignKeyConstraint(['id_usuario'], ['pos.usuario.id_usuario'], ),
     sa.ForeignKeyConstraint(['id_venta'], ['pos.venta.id_venta'], ),
     sa.PrimaryKeyConstraint('id_movimiento'),
     schema='pos'
     )
     op.create_index(op.f('ix_pos_movimiento_inventario_id_movimiento'), 'movimiento_inventario', ['id_movimiento'], unique=False, schema='pos')
-    op.create_table('orden_compra_detalle',
-    sa.Column('id_detalle', sa.Integer(), nullable=False),
-    sa.Column('id_orden_compra', sa.Integer(), nullable=False),
-    sa.Column('id_insumo', sa.Integer(), nullable=False),
-    sa.Column('cantidad_solicitada', sa.Numeric(precision=12, scale=4), nullable=False),
-    sa.Column('cantidad_recibida', sa.Numeric(precision=12, scale=4), nullable=True),
-    sa.Column('precio_unitario', sa.Numeric(precision=14, scale=4), nullable=True),
-    sa.Column('subtotal_linea', sa.Numeric(precision=16, scale=2), nullable=True),
-    sa.Column('notas', sa.Text(), nullable=True),
-    sa.Column('fecha_creacion', sa.DateTime(), nullable=True),
-    sa.Column('fecha_actualizacion', sa.DateTime(), nullable=True),
-    sa.ForeignKeyConstraint(['id_insumo'], ['pos.insumo.id_insumo'], ),
-    sa.ForeignKeyConstraint(['id_orden_compra'], ['pos.orden_compra.id_orden_compra'], ),
-    sa.PrimaryKeyConstraint('id_detalle'),
-    schema='pos'
-    )
-    op.create_index(op.f('ix_pos_orden_compra_detalle_id_detalle'), 'orden_compra_detalle', ['id_detalle'], unique=False, schema='pos')
     op.create_table('pago',
     sa.Column('id_pago', sa.Integer(), nullable=False),
     sa.Column('id_venta', sa.Integer(), nullable=False),
     sa.Column('id_metodo_pago', sa.Integer(), nullable=False),
+    sa.Column('id_usuario_validacion', sa.Integer(), nullable=True),
     sa.Column('monto', sa.Numeric(precision=16, scale=2), nullable=False),
     sa.Column('url_comprobante', sa.String(), nullable=True),
-    sa.Column('estado_validacion', sa.String(), nullable=True),
+    sa.Column('estado_validacion', sa.String(length=20), nullable=False),
+    sa.Column('fecha_validacion', sa.DateTime(timezone=True), nullable=True),
     sa.ForeignKeyConstraint(['id_metodo_pago'], ['pos.metodo_pago.id_metodo_pago'], ),
+    sa.ForeignKeyConstraint(['id_usuario_validacion'], ['pos.usuario.id_usuario'], ),
     sa.ForeignKeyConstraint(['id_venta'], ['pos.venta.id_venta'], ),
     sa.PrimaryKeyConstraint('id_pago'),
     schema='pos'
     )
     op.create_index(op.f('ix_pos_pago_id_pago'), 'pago', ['id_pago'], unique=False, schema='pos')
-    op.create_table('receta_detalle',
-    sa.Column('id_receta_detalle', sa.Integer(), nullable=False),
-    sa.Column('id_receta_version', sa.Integer(), nullable=False),
-    sa.Column('id_insumo', sa.Integer(), nullable=True),
-    sa.Column('id_subreceta', sa.Integer(), nullable=True),
-    sa.Column('id_unidad', sa.Integer(), nullable=False),
-    sa.Column('cantidad', sa.Numeric(), nullable=False),
-    sa.Column('costo_unitario', sa.Numeric(), nullable=True),
-    sa.Column('costo_total', sa.Numeric(), nullable=True),
-    sa.Column('pct_participacion', sa.Numeric(), nullable=True),
-    sa.ForeignKeyConstraint(['id_insumo'], ['pos.insumo.id_insumo'], ),
-    sa.ForeignKeyConstraint(['id_receta_version'], ['pos.receta_version.id_receta_version'], ),
-    sa.ForeignKeyConstraint(['id_subreceta'], ['pos.subreceta.id_subreceta'], ),
-    sa.ForeignKeyConstraint(['id_unidad'], ['pos.unidad_medida.id_unidad'], ),
-    sa.PrimaryKeyConstraint('id_receta_detalle'),
-    schema='pos'
-    )
-    op.create_index(op.f('ix_pos_receta_detalle_id_receta_detalle'), 'receta_detalle', ['id_receta_detalle'], unique=False, schema='pos')
-    op.create_table('receta_paso',
-    sa.Column('id_paso', sa.Integer(), nullable=False),
-    sa.Column('id_receta_version', sa.Integer(), nullable=False),
-    sa.Column('numero_paso', sa.Integer(), nullable=False),
-    sa.Column('titulo', sa.String(), nullable=False),
-    sa.Column('descripcion', sa.String(), nullable=True),
-    sa.Column('tiempo_estimado_min', sa.Integer(), nullable=True),
-    sa.ForeignKeyConstraint(['id_receta_version'], ['pos.receta_version.id_receta_version'], ),
-    sa.PrimaryKeyConstraint('id_paso'),
-    schema='pos'
-    )
-    op.create_index(op.f('ix_pos_receta_paso_id_paso'), 'receta_paso', ['id_paso'], unique=False, schema='pos')
-    op.create_table('cierre_caja_detalle',
-    sa.Column('id_detalle', sa.Integer(), nullable=False),
-    sa.Column('id_cierre', sa.Integer(), nullable=False),
-    sa.Column('id_metodo_pago', sa.Integer(), nullable=False),
-    sa.Column('total_esperado', sa.Numeric(), nullable=True),
-    sa.Column('total_contado', sa.Numeric(), nullable=True),
-    sa.Column('diferencia', sa.Numeric(), nullable=True),
-    sa.ForeignKeyConstraint(['id_cierre'], ['pos.cierre_caja.id_cierre'], ),
-    sa.ForeignKeyConstraint(['id_metodo_pago'], ['pos.metodo_pago.id_metodo_pago'], ),
-    sa.PrimaryKeyConstraint('id_detalle'),
-    schema='pos'
-    )
-    op.create_index(op.f('ix_pos_cierre_caja_detalle_id_detalle'), 'cierre_caja_detalle', ['id_detalle'], unique=False, schema='pos')
     op.create_table('devolucion',
     sa.Column('id_devolucion', sa.Integer(), nullable=False),
+    sa.Column('id_venta', sa.Integer(), nullable=False),
     sa.Column('id_item_venta', sa.Integer(), nullable=False),
+    sa.Column('id_aprobador', sa.Integer(), nullable=True),
     sa.Column('cantidad', sa.Integer(), nullable=False),
     sa.Column('motivo', sa.String(), nullable=False),
     sa.Column('observacion', sa.String(), nullable=True),
-    sa.Column('fecha', sa.DateTime(), nullable=True),
+    sa.Column('estado', sa.String(length=20), nullable=False),
+    sa.Column('reintegra_stock', sa.Integer(), nullable=False),
+    sa.Column('fecha', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['id_aprobador'], ['pos.usuario.id_usuario'], ),
     sa.ForeignKeyConstraint(['id_item_venta'], ['pos.item_venta.id_item_venta'], ),
+    sa.ForeignKeyConstraint(['id_venta'], ['pos.venta.id_venta'], ),
     sa.PrimaryKeyConstraint('id_devolucion'),
     schema='pos'
     )
@@ -483,33 +654,47 @@ def downgrade() -> None:
     # ### commands auto generated by Alembic - please adjust! ###
     op.drop_index(op.f('ix_pos_devolucion_id_devolucion'), table_name='devolucion', schema='pos')
     op.drop_table('devolucion', schema='pos')
-    op.drop_index(op.f('ix_pos_cierre_caja_detalle_id_detalle'), table_name='cierre_caja_detalle', schema='pos')
-    op.drop_table('cierre_caja_detalle', schema='pos')
-    op.drop_index(op.f('ix_pos_receta_paso_id_paso'), table_name='receta_paso', schema='pos')
-    op.drop_table('receta_paso', schema='pos')
-    op.drop_index(op.f('ix_pos_receta_detalle_id_receta_detalle'), table_name='receta_detalle', schema='pos')
-    op.drop_table('receta_detalle', schema='pos')
     op.drop_index(op.f('ix_pos_pago_id_pago'), table_name='pago', schema='pos')
     op.drop_table('pago', schema='pos')
-    op.drop_index(op.f('ix_pos_orden_compra_detalle_id_detalle'), table_name='orden_compra_detalle', schema='pos')
-    op.drop_table('orden_compra_detalle', schema='pos')
     op.drop_index(op.f('ix_pos_movimiento_inventario_id_movimiento'), table_name='movimiento_inventario', schema='pos')
     op.drop_table('movimiento_inventario', schema='pos')
     op.drop_index(op.f('ix_pos_item_venta_id_item_venta'), table_name='item_venta', schema='pos')
     op.drop_table('item_venta', schema='pos')
     op.drop_index(op.f('ix_pos_factura_id_factura'), table_name='factura', schema='pos')
     op.drop_table('factura', schema='pos')
+    op.drop_index(op.f('ix_pos_venta_id_venta'), table_name='venta', schema='pos')
+    op.drop_table('venta', schema='pos')
+    op.drop_index(op.f('ix_pos_pedido_servicio_id_pedido_servicio'), table_name='pedido_servicio', schema='pos')
+    op.drop_table('pedido_servicio', schema='pos')
+    op.drop_index(op.f('ix_pos_pedido_item_id_pedido_item'), table_name='pedido_item', schema='pos')
+    op.drop_table('pedido_item', schema='pos')
+    op.drop_index(op.f('ix_pos_cierre_caja_detalle_id_detalle'), table_name='cierre_caja_detalle', schema='pos')
+    op.drop_table('cierre_caja_detalle', schema='pos')
+    op.drop_index(op.f('ix_pos_receta_paso_id_paso'), table_name='receta_paso', schema='pos')
+    op.drop_table('receta_paso', schema='pos')
+    op.drop_index(op.f('ix_pos_receta_detalle_subreceta_id_receta_detalle_subreceta'), table_name='receta_detalle_subreceta', schema='pos')
+    op.drop_table('receta_detalle_subreceta', schema='pos')
+    op.drop_index(op.f('ix_pos_receta_detalle_insumo_id_receta_detalle_insumo'), table_name='receta_detalle_insumo', schema='pos')
+    op.drop_table('receta_detalle_insumo', schema='pos')
+    op.drop_index(op.f('ix_pos_pedido_id_pedido'), table_name='pedido', schema='pos')
+    op.drop_table('pedido', schema='pos')
+    op.drop_index(op.f('ix_pos_orden_compra_detalle_id_detalle'), table_name='orden_compra_detalle', schema='pos')
+    op.drop_table('orden_compra_detalle', schema='pos')
     op.drop_index(op.f('ix_pos_cierre_caja_id_cierre'), table_name='cierre_caja', schema='pos')
     op.drop_table('cierre_caja', schema='pos')
+    op.drop_index(op.f('ix_pos_alerta_perecible_id_alerta_perecible'), table_name='alerta_perecible', schema='pos')
+    op.drop_table('alerta_perecible', schema='pos')
     op.drop_index(op.f('ix_pos_alerta_id_alerta'), table_name='alerta', schema='pos')
     op.drop_table('alerta', schema='pos')
     op.drop_index(op.f('ix_mkt_campana_producto_id_campana_producto'), table_name='campana_producto', schema='mkt')
     op.drop_table('campana_producto', schema='mkt')
     op.drop_table('campana_canal', schema='mkt')
-    op.drop_index(op.f('ix_pos_venta_id_venta'), table_name='venta', schema='pos')
-    op.drop_table('venta', schema='pos')
     op.drop_index(op.f('ix_pos_subreceta_ingrediente_id_subreceta_ing'), table_name='subreceta_ingrediente', schema='pos')
     op.drop_table('subreceta_ingrediente', schema='pos')
+    op.drop_index(op.f('ix_pos_stock_id_stock'), table_name='stock', schema='pos')
+    op.drop_table('stock', schema='pos')
+    op.drop_index(op.f('ix_pos_reserva_id_reserva'), table_name='reserva', schema='pos')
+    op.drop_table('reserva', schema='pos')
     op.drop_index(op.f('ix_pos_receta_version_id_receta_version'), table_name='receta_version', schema='pos')
     op.drop_table('receta_version', schema='pos')
     op.drop_index(op.f('ix_pos_orden_compra_numero_orden'), table_name='orden_compra', schema='pos')
@@ -517,8 +702,12 @@ def downgrade() -> None:
     op.drop_table('orden_compra', schema='pos')
     op.drop_index(op.f('ix_pos_insumo_proveedor_id_insumo_proveedor'), table_name='insumo_proveedor', schema='pos')
     op.drop_table('insumo_proveedor', schema='pos')
+    op.drop_index(op.f('ix_pos_auditoria_id_auditoria'), table_name='auditoria', schema='pos')
+    op.drop_table('auditoria', schema='pos')
     op.drop_index(op.f('ix_pos_apertura_caja_id_apertura'), table_name='apertura_caja', schema='pos')
     op.drop_table('apertura_caja', schema='pos')
+    op.drop_index(op.f('ix_pos_ajuste_inventario_id_ajuste'), table_name='ajuste_inventario', schema='pos')
+    op.drop_table('ajuste_inventario', schema='pos')
     op.drop_index(op.f('ix_mkt_campana_id_campana'), table_name='campana', schema='mkt')
     op.drop_table('campana', schema='mkt')
     op.drop_index(op.f('ix_pos_usuario_id_usuario'), table_name='usuario', schema='pos')
@@ -531,12 +720,16 @@ def downgrade() -> None:
     op.drop_table('unidad_medida', schema='pos')
     op.drop_index(op.f('ix_pos_subreceta_id_subreceta'), table_name='subreceta', schema='pos')
     op.drop_table('subreceta', schema='pos')
+    op.drop_index(op.f('ix_pos_servicio_adicional_id_servicio'), table_name='servicio_adicional', schema='pos')
+    op.drop_table('servicio_adicional', schema='pos')
     op.drop_index(op.f('ix_pos_rol_id_rol'), table_name='rol', schema='pos')
     op.drop_table('rol', schema='pos')
     op.drop_index(op.f('ix_pos_proveedor_id_proveedor'), table_name='proveedor', schema='pos')
     op.drop_table('proveedor', schema='pos')
     op.drop_index(op.f('ix_pos_metodo_pago_id_metodo_pago'), table_name='metodo_pago', schema='pos')
     op.drop_table('metodo_pago', schema='pos')
+    op.drop_index(op.f('ix_pos_mesa_id_mesa'), table_name='mesa', schema='pos')
+    op.drop_table('mesa', schema='pos')
     op.drop_index(op.f('ix_pos_marca_id_marca'), table_name='marca', schema='pos')
     op.drop_table('marca', schema='pos')
     op.drop_index(op.f('ix_pos_cliente_id_cliente'), table_name='cliente', schema='pos')
