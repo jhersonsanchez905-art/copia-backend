@@ -8,6 +8,9 @@ Author: Suley Suarez / Johan Valero / Ivan Ospino / Carlos Espinel
 Issue: #1, #40
 """
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.config import settings
 from app.exceptions import MajesaError, majesa_exception_handler
 from app.routers import insumo, orden_compra, producto, receta, venta, caja, inventario, proveedor, catalogo
 
@@ -18,6 +21,19 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# ── CORS ──────────────────────────────────────────────────────────────────────
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ── Middleware ────────────────────────────────────────────────────────────────
+app.add_middleware(AuditoriaMiddleware)
+
+# ── Exception handlers ────────────────────────────────────────────────────────
 app.add_exception_handler(MajesaError, majesa_exception_handler)
 
 app.include_router(producto.router, prefix="/api/v1", tags=["Productos"])
