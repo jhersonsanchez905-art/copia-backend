@@ -19,6 +19,7 @@ from app.routers import (
     auditoria,
     caja,
     catalogo,
+    devolucion,
     insumo,
     inventario,
     mesa,
@@ -75,6 +76,7 @@ app.include_router(pedido.router, prefix=_V1)
 app.include_router(servicio_adicional.router, prefix=_V1)
 app.include_router(alerta_perecible.router, prefix=_V1)
 app.include_router(auditoria.router, prefix=_V1)
+app.include_router(devolucion.router, prefix=_V1)
 
 # ── Health Check ──────────────────────────────────────────────────────────────
 @app.get("/health", tags=["Health"])
