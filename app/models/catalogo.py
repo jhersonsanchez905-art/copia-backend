@@ -38,6 +38,8 @@ class Usuario(Base):
     rol = relationship("Rol", back_populates="usuarios")
     ventas = relationship("Venta", back_populates="usuario", foreign_keys="Venta.id_usuario")
     ordenes_compra = relationship("OrdenCompra", back_populates="usuario")
+    reservas = relationship("Reserva", back_populates="usuario")
+    pedidos = relationship("Pedido", back_populates="usuario")
 
 
 class Cliente(Base):
@@ -56,6 +58,7 @@ class Cliente(Base):
     observaciones = Column(String)
 
     ventas = relationship("Venta", back_populates="cliente")
+    reservas = relationship("Reserva", back_populates="cliente")
 
 
 class Marca(Base):
