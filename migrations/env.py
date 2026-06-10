@@ -23,7 +23,7 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-# Strip async driver so alembic can use a sync connection
+# Strip async driver — sslmode=require works for both asyncpg and psycopg2
 _sync_url = re.sub(r"\+asyncpg", "", settings.DATABASE_URL)
 config.set_main_option("sqlalchemy.url", _sync_url)
 
