@@ -9,6 +9,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.dependencies import require_rol
+from app.models.catalogo import Usuario
 from app.schemas.caja_schema import (
     AperturaCajaRequest,
     AperturaCajaResponse,
@@ -26,15 +28,16 @@ router = APIRouter()
 async def abrir_caja(
     data: AperturaCajaRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("cajero", "administrador")),
 ):
-    """Open a new cash register shift (admin only)."""
-    id_usuario = 1  # TODO: extract from Clerk token
-    return await caja_service.abrir_caja(data, id_usuario, db)
+    return await caja_service.abrir_caja(data, current_user.id_usuario, db)
 
 
 @router.get("/apertura/activa", response_model=AperturaCajaResponse)
-async def apertura_activa(db: AsyncSession = Depends(get_db)):
-    """Get the currently active (not yet closed) apertura."""
+async def apertura_activa(
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("cajero", "administrador")),
+):
     return await caja_service.get_apertura_activa(db)
 
 
@@ -45,24 +48,23 @@ async def cerrar_caja(
     id_apertura: int,
     data: CierreCajaRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("cajero", "administrador")),
 ):
-    """
-    Close the currently active cash register shift (admin only).
-    Calculates expected totals from sales and compares with counted amounts.
-    """
-    id_usuario = 1  # TODO: extract from Clerk token
-    return await caja_service.cerrar_caja(data, id_usuario, db)
+    return await caja_service.cerrar_caja(data, current_user.id_usuario, db)
 
 
 @router.get("/cierres", response_model=list[CierreCajaResponse])
-async def listar_cierres(db: AsyncSession = Depends(get_db)):
-    """List all cash register closings (admin only)."""
+async def listar_cierres(
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
+):
     return await caja_service.get_cierres(db)
 
 
 @router.get("/cierres/{id_cierre}", response_model=CierreCajaResponse)
 async def obtener_cierre(
-    id_cierre: int, db: AsyncSession = Depends(get_db)
+    id_cierre: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
 ):
-    """Get a specific cash register closing with details."""
     return await caja_service.get_cierre(db, id_cierre)
