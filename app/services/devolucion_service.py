@@ -2,12 +2,7 @@
 devolucion_service.py
 Async business logic for Devolucion (returns).
 States: pendiente → aprobada | rechazada
-
-<<<<<<< HEAD
-Author: Jherson
-=======
-Author: SebasValero12
->>>>>>> 37ef0cb (feat: complete pedido, caja, and devolucion flows)
+Author: Jherson / SebasValero12
 Issue: #40
 """
 import datetime
@@ -26,8 +21,6 @@ def _now() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc)
 
 
-# ── Queries ───────────────────────────────────────────────────────────────────
-
 async def get_devolucion(db: AsyncSession, id_devolucion: int) -> Devolucion:
     devolucion = await devolucion_repo.get_devolucion_by_id(db, id_devolucion)
     if not devolucion:
@@ -35,21 +28,11 @@ async def get_devolucion(db: AsyncSession, id_devolucion: int) -> Devolucion:
     return devolucion
 
 
-async def get_devoluciones(
-    db: AsyncSession, estado: str | None = None
-) -> list[Devolucion]:
+async def get_devoluciones(db: AsyncSession, estado: str | None = None) -> list[Devolucion]:
     return await devolucion_repo.get_devoluciones(db, estado=estado)
 
 
-# ── Crear ─────────────────────────────────────────────────────────────────────
-
-async def crear_devolucion(
-    db: AsyncSession, data: DevolucionCreate
-) -> Devolucion:
-    """
-    Create a return for an ItemVenta.
-    The associated Venta must be in state 'completada'.
-    """
+async def crear_devolucion(db: AsyncSession, data: DevolucionCreate) -> Devolucion:
     venta = await devolucion_repo.get_venta_by_id(db, data.id_venta)
     if not venta:
         raise MajesaError(f"Venta {data.id_venta} no encontrada", 404)
@@ -60,19 +43,14 @@ async def crear_devolucion(
             400,
         )
 
-    item_venta = await devolucion_repo.get_item_venta_by_id(
-        db, data.id_item_venta
-    )
+    item_venta = await devolucion_repo.get_item_venta_by_id(db, data.id_item_venta)
     if not item_venta or item_venta.id_venta != data.id_venta:
         raise MajesaError(
-            f"ItemVenta {data.id_item_venta} no encontrado en venta "
-            f"{data.id_venta}",
-            404,
+            f"ItemVenta {data.id_item_venta} no encontrado en venta {data.id_venta}", 404
         )
     if data.cantidad > item_venta.cantidad:
         raise MajesaError(
-            f"Cantidad a devolver ({data.cantidad}) excede la cantidad "
-            f"vendida ({item_venta.cantidad})",
+            f"Cantidad a devolver ({data.cantidad}) excede la cantidad vendida ({item_venta.cantidad})",
             400,
         )
 
@@ -91,17 +69,7 @@ async def crear_devolucion(
     return devolucion
 
 
-# ── Aprobar ───────────────────────────────────────────────────────────────────
-
-async def aprobar_devolucion(
-    db: AsyncSession, id_devolucion: int, id_usuario: int
-) -> Devolucion:
-    """
-    Approve a return (admin only).
-    If reintegra_stock == true, uses receta_snapshot from ItemVenta to
-    call inventario_service.ingresar_stock() for each ingredient and
-    creates a MovimientoInventario of type 'entrada'.
-    """
+async def aprobar_devolucion(db: AsyncSession, id_devolucion: int, id_usuario: int) -> Devolucion:
     devolucion = await get_devolucion(db, id_devolucion)
     if devolucion.estado != "pendiente":
         raise MajesaError(
@@ -110,23 +78,13 @@ async def aprobar_devolucion(
             400,
         )
 
-    update_data: dict = {
-        "estado": "aprobada",
-        "id_aprobador": id_usuario,
-    }
+    update_data: dict = {"estado": "aprobada", "id_aprobador": id_usuario}
 
     if devolucion.reintegra_stock:
-        item_venta = await devolucion_repo.get_item_venta_by_id(
-            db, devolucion.id_item_venta
-        )
+        item_venta = await devolucion_repo.get_item_venta_by_id(db, devolucion.id_item_venta)
         if item_venta and item_venta.receta_snapshot:
-            snapshot = item_venta.receta_snapshot
-            cantidad_devuelta = devolucion.cantidad
-
-            for detalle in snapshot.get("detalles_insumo", []):
-                cantidad_insumo = (
-                    Decimal(str(detalle["cantidad"])) * cantidad_devuelta
-                )
+            for detalle in item_venta.receta_snapshot.get("detalles_insumo", []):
+                cantidad_insumo = Decimal(str(detalle["cantidad"])) * devolucion.cantidad
                 await inventario_service.ingresar_stock(
                     db,
                     id_insumo=detalle["id_insumo"],
@@ -135,19 +93,12 @@ async def aprobar_devolucion(
                     motivo=f"Reintegro por devolución #{id_devolucion}",
                 )
 
-    devolucion = await devolucion_repo.update_devolucion(
-        db, devolucion, update_data
-    )
+    devolucion = await devolucion_repo.update_devolucion(db, devolucion, update_data)
     await db.commit()
     return devolucion
 
 
-# ── Rechazar ──────────────────────────────────────────────────────────────────
-
-async def rechazar_devolucion(
-    db: AsyncSession, id_devolucion: int, id_usuario: int
-) -> Devolucion:
-    """Reject a return (admin only). Does NOT affect inventory."""
+async def rechazar_devolucion(db: AsyncSession, id_devolucion: int, id_usuario: int) -> Devolucion:
     devolucion = await get_devolucion(db, id_devolucion)
     if devolucion.estado != "pendiente":
         raise MajesaError(
@@ -156,9 +107,7 @@ async def rechazar_devolucion(
             400,
         )
     devolucion = await devolucion_repo.update_devolucion(
-        db,
-        devolucion,
-        {"estado": "rechazada", "id_aprobador": id_usuario},
+        db, devolucion, {"estado": "rechazada", "id_aprobador": id_usuario}
     )
     await db.commit()
     return devolucion
