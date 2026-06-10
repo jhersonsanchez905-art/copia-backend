@@ -69,7 +69,7 @@ class MovimientoInventario(Base):
  
     # --- relaciones ---
     insumo = relationship("Insumo", back_populates="movimientos")
-    venta = relationship("Venta")
+    venta = relationship("Venta", back_populates="movimientos")
     orden_compra = relationship("OrdenCompra")
     usuario = relationship("Usuario")
  
