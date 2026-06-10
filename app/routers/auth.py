@@ -12,13 +12,18 @@ from sqlalchemy.orm import joinedload
 
 from app.config import settings
 from app.database import get_db
-from app.dependencies.auth import _verify_session_with_clerk
+from app.dependencies.auth import _verify_session_with_clerk, get_current_user
 from app.models.catalogo import Usuario
 from app.schemas.catalogo_schema import UsuarioOut
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 _security = HTTPBearer(auto_error=False)
+
+
+@router.get("/me", response_model=UsuarioOut, summary="Usuario autenticado actual")
+async def me(current_user: Usuario = Depends(get_current_user)):
+    return current_user
 
 
 @router.post("/register", response_model=UsuarioOut, summary="Registrar usuario desde Clerk")
