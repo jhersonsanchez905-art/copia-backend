@@ -54,8 +54,11 @@ def _setup_client(user: Usuario, db: AsyncMock) -> TestClient:
     async def _db():
         yield db
 
+    async def _get_user():
+        return user
+
     app.dependency_overrides[get_db] = _db
-    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[get_current_user] = _get_user
     return TestClient(app)
 
 
