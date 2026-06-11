@@ -9,6 +9,9 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.dependencies.auth import get_current_user
+from app.dependencies.roles import require_rol
+from app.models.catalogo import Usuario
 from app.schemas.producto_schema import (
     ProductoCreate,
     ProductoUpdate,
@@ -31,6 +34,7 @@ async def listar_productos(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
 ):
     return await producto_service.listar_productos(
         db,
@@ -47,7 +51,9 @@ async def listar_productos(
     summary="Obtener producto por ID",
 )
 async def obtener_producto(
-    producto_id: int, db: AsyncSession = Depends(get_db)
+    producto_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
 ):
     return await producto_service.obtener_producto(db, producto_id)
 
@@ -59,7 +65,9 @@ async def obtener_producto(
     summary="Crear producto",
 )
 async def crear_producto(
-    payload: ProductoCreate, db: AsyncSession = Depends(get_db)
+    payload: ProductoCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
 ):
     return await producto_service.crear_producto(db, payload)
 
@@ -73,6 +81,7 @@ async def actualizar_producto(
     producto_id: int,
     payload: ProductoUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
 ):
     return await producto_service.actualizar_producto(db, producto_id, payload)
 
@@ -83,6 +92,8 @@ async def actualizar_producto(
     summary="Eliminar producto",
 )
 async def eliminar_producto(
-    producto_id: int, db: AsyncSession = Depends(get_db)
+    producto_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
 ):
     await producto_service.eliminar_producto(db, producto_id)

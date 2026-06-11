@@ -1,27 +1,20 @@
 """
-caja_service.py
-Async business logic for cash register module.
+app/services/caja_service.py
+
+Business logic for cash register module.
 Handles shift opening and closing with payment method breakdown.
 
-Author: Suley Suarez / Jherson
-Issue: #16, #40
+Author: Suley Suarez
+Issue: #16
 """
-import datetime
 from decimal import Decimal
-
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.exceptions import MajesaError
-from app.models.caja import AperturaCaja, CierreCaja, CierreCajaDetalle
-from app.repositories import caja_repo
 from app.schemas.caja_schema import AperturaCajaRequest, CierreCajaRequest
+from app.repositories import caja_repo
+from app.models.caja import AperturaCaja, CierreCaja, CierreCajaDetalle
+from app.exceptions import MajesaError
 
-
-def _now() -> datetime.datetime:
-    return datetime.datetime.now(datetime.timezone.utc)
-
-
-# ── Apertura ──────────────────────────────────────────────────────────────────
 
 async def abrir_caja(
     data: AperturaCajaRequest,
@@ -30,15 +23,15 @@ async def abrir_caja(
 ) -> AperturaCaja:
     """
     Open a new cash register shift.
-    Validates that no other apertura exists for the same turno and fecha.
+
+    Raises:
+        MajesaError: If there is already an open (unclosed) shift for this user.
     """
-    existente = await caja_repo.get_apertura_by_turno_fecha(
-        data.turno, data.fecha, db
-    )
+    existente = await caja_repo.get_apertura_sin_cierre(id_usuario, db)
     if existente:
         raise MajesaError(
-            f"Ya existe una apertura para el turno '{data.turno}' "
-            f"en la fecha {data.fecha}",
+            f"Ya existe una apertura activa (id={existente.id_apertura}) para este usuario. "
+            "Cierra el turno actual antes de abrir uno nuevo.",
             409,
         )
 
@@ -47,23 +40,19 @@ async def abrir_caja(
         turno=data.turno,
         fecha=data.fecha,
         monto_inicial=data.monto_inicial,
-        hora_apertura=_now(),
+        hora_apertura=datetime.now(timezone.utc),
         observaciones=data.observaciones,
     )
-    apertura = await caja_repo.create_apertura(apertura, db)
-    await db.commit()
-    return apertura
+    return await caja_repo.create_apertura(apertura, db)
 
 
-async def get_apertura_activa(db: AsyncSession) -> AperturaCaja:
-    """Return the currently open (not yet closed) apertura."""
-    apertura = await caja_repo.get_apertura_activa_sin_cierre(db)
+async def get_apertura_activa(id_usuario: int, db: AsyncSession) -> AperturaCaja:
+    """Return the currently open (not yet closed) shift for the given user."""
+    apertura = await caja_repo.get_apertura_sin_cierre(id_usuario, db)
     if not apertura:
-        raise MajesaError("No hay apertura de caja activa", 404)
+        raise MajesaError("No hay apertura de caja activa para este usuario", 404)
     return apertura
 
-
-# ── Cierre ────────────────────────────────────────────────────────────────────
 
 async def cerrar_caja(
     data: CierreCajaRequest,
@@ -71,18 +60,15 @@ async def cerrar_caja(
     db: AsyncSession,
 ) -> CierreCaja:
     """
-    Close the currently active cash register shift.
-    Calculates expected totals from sales and compares with counted amounts.
-    """
-    apertura = await caja_repo.get_apertura_activa_sin_cierre(db)
-    if not apertura:
-        raise MajesaError("No hay apertura de caja activa para cerrar", 404)
+    Close the active cash register shift for the current user.
+    Calculates expected totals from completed sales and compares with counted amounts.
 
-    ya_cerrada = await caja_repo.get_cierre_by_apertura(
-        apertura.id_apertura, db
-    )
-    if ya_cerrada:
-        raise MajesaError("Esta apertura ya fue cerrada", 409)
+    Raises:
+        MajesaError: If there is no active opening for this user.
+    """
+    apertura = await caja_repo.get_apertura_sin_cierre(id_usuario, db)
+    if not apertura:
+        raise MajesaError("No hay apertura de caja activa para este usuario", 404)
 
     total_transacciones = await caja_repo.get_total_ventas_by_apertura(
         apertura.id_apertura, db
@@ -92,7 +78,8 @@ async def cerrar_caja(
     )
 
     total_contado = sum(
-        float(d.total_contado) for d in data.detalle
+        (d.total_contado for d in data.detalle),
+        Decimal(0),
     )
     diferencia_general = total_contado - total_transacciones
 
@@ -104,33 +91,34 @@ async def cerrar_caja(
         total_general=total_contado,
         total_transacciones=total_transacciones,
         diferencia=diferencia_general,
-        hora_cierre=_now(),
+        hora_cierre=datetime.now(timezone.utc),
         observaciones=data.observaciones,
     )
     cierre = await caja_repo.create_cierre(cierre, db)
 
     for d in data.detalle:
-        total_esperado = Decimal(
-            str(totales_por_metodo.get(d.id_metodo_pago, 0))
+        total_esperado = totales_por_metodo.get(d.id_metodo_pago, Decimal(0))
+        await caja_repo.create_cierre_detalle(
+            CierreCajaDetalle(
+                id_cierre=cierre.id_cierre,
+                id_metodo_pago=d.id_metodo_pago,
+                total_esperado=total_esperado,
+                total_contado=d.total_contado,
+                diferencia=d.total_contado - total_esperado,
+            ),
+            db,
         )
-        detalle = CierreCajaDetalle(
-            id_cierre=cierre.id_cierre,
-            id_metodo_pago=d.id_metodo_pago,
-            total_esperado=total_esperado,
-            total_contado=d.total_contado,
-            diferencia=d.total_contado - total_esperado,
-        )
-        await caja_repo.create_cierre_detalle(detalle, db)
 
-    await db.commit()
-    return await caja_repo.get_cierre_by_id(cierre.id_cierre, db)
+    return await caja_repo.get_cierre_by_apertura(apertura.id_apertura, db)
 
 
 async def get_cierres(db: AsyncSession) -> list[CierreCaja]:
+    """Return all cash register closings ordered by most recent first."""
     return await caja_repo.get_cierres(db)
 
 
-async def get_cierre(db: AsyncSession, id_cierre: int) -> CierreCaja:
+async def get_cierre(id_cierre: int, db: AsyncSession) -> CierreCaja:
+    """Return a specific closing with its payment method breakdown."""
     cierre = await caja_repo.get_cierre_by_id(id_cierre, db)
     if not cierre:
         raise MajesaError(f"Cierre {id_cierre} no encontrado", 404)

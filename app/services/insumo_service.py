@@ -3,9 +3,12 @@ insumo_service.py
 Async business logic for Insumo, Subreceta, and SubrecetaIngrediente.
 """
 from fastapi import HTTPException, status
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.exceptions import MajesaError
 from app.models.insumo import Insumo, Subreceta, SubrecetaIngrediente
+from app.models.receta import RecetaDetalleInsumo, RecetaDetalleSubreceta, RecetaVersion
 from app.repositories import insumo_repo
 from app.schemas.insumo_schema import (
     InsumoCreate,
@@ -85,6 +88,20 @@ async def update_subreceta(
     if not fields:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No hay campos para actualizar")
     subreceta = await insumo_repo.update_subreceta(db, subreceta, fields)
+
+    if "costo_total" in fields or "porciones" in fields:
+        from app.services.receta_service import _calcular_costo_version
+
+        res = await db.execute(
+            select(RecetaDetalleSubreceta.id_receta_version)
+            .where(RecetaDetalleSubreceta.id_subreceta == id_subreceta)
+            .distinct()
+        )
+        for (vid,) in res.all():
+            rv = await db.get(RecetaVersion, vid)
+            if rv:
+                rv.costo_total = await _calcular_costo_version(db, vid)
+
     await db.commit()
     return subreceta
 

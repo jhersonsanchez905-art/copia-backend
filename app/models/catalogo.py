@@ -113,3 +113,4 @@ class MetodoPago(Base):
     activo = Column(Boolean, default=True)
 
     pagos = relationship("Pago", back_populates="metodo_pago")
+    

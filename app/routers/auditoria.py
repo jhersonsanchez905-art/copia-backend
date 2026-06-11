@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.dependencies.roles import require_rol
+from app.models.catalogo import Usuario
 from app.schemas.auditoria_schema import AccionEnum, AuditoriaResponse
 from app.services import auditoria_service
 
@@ -21,6 +23,7 @@ async def listar_auditoria(
     skip: int = 0,
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("administrador")),
 ):
     return await auditoria_service.get_auditorias(
         db,

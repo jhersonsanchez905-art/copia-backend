@@ -3,10 +3,12 @@ inventario.py (router)
 Endpoints for inventory alerts and stock movements.
 AjusteInventario endpoints are in ajuste_inventario.py router.
 """
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.dependencies.auth import get_current_user
+from app.models.catalogo import Usuario
 from app.schemas.inventario_schema import AlertaResponse, MovimientoResponse
 from app.services import inventario_service
 
@@ -18,7 +20,10 @@ router = APIRouter()
     response_model=list[AlertaResponse],
     summary="Listar todas las alertas de stock activas",
 )
-async def get_alertas(db: AsyncSession = Depends(get_db)):
+async def get_alertas(
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
     return await inventario_service.get_alertas_activas(db)
 
 
@@ -27,5 +32,9 @@ async def get_alertas(db: AsyncSession = Depends(get_db)):
     response_model=list[MovimientoResponse],
     summary="Listar movimientos de inventario de un insumo",
 )
-async def get_movimientos(id_insumo: int, db: AsyncSession = Depends(get_db)):
+async def get_movimientos(
+    id_insumo: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
     return await inventario_service.get_movimientos_by_insumo(db, id_insumo)

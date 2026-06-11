@@ -22,7 +22,7 @@ from sqlalchemy.orm import selectinload
 
 from app.exceptions import InsumoInsuficienteError, MajesaError, VentaNoEncontradaError
 from app.models.insumo import Subreceta
-from app.models.pedido import Pedido
+from app.models.pedido import Pedido, PedidoServicio
 from app.models.venta import Factura, ItemVenta, Pago, Venta
 from app.repositories import producto_repo, receta_repo, stock_repo, venta_repo
 from app.schemas.venta_schema import VentaCreateRequest
@@ -131,7 +131,18 @@ async def registrar_venta(
 
         # ── Step 4: create Venta ─────────────────────────────────────────────
         subtotal = sum(precio * qty for _, _, precio, qty in items_info)
+
+        if data.id_pedido is not None:
+            servicios_result = await db.execute(
+                select(PedidoServicio).where(PedidoServicio.id_pedido == data.id_pedido)
+            )
+            subtotal += sum(s.subtotal for s in servicios_result.scalars().all())
+
         total_pagado = sum(p.monto for p in data.pagos)
+        if total_pagado < subtotal:
+            raise MajesaError(
+                f"Pago insuficiente: total={subtotal}, pagado={total_pagado}", 422
+            )
 
         venta = Venta(
             id_apertura=data.id_apertura,

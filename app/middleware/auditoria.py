@@ -126,20 +126,24 @@ class AuditoriaMiddleware(BaseHTTPMiddleware):
         if request.method not in _AUDITED_METHODS:
             return await call_next(request)
 
-        # Buffer request body so we can pass it to the audit writer.
-        body_bytes = await request.body()
-
-        # Rebuild the receive channel so FastAPI can still read the body.
-        async def _receive():
-            return {"type": "http.request", "body": body_bytes, "more_body": False}
-
-        request._receive = _receive  # type: ignore[assignment]
-
         response = await call_next(request)
 
-        # Only audit successful responses.
-        if response.status_code >= 400:
+        # Skip audit for auth failures and all error responses.
+        # Do NOT attempt to read the request body for 401/403 — the ASGI
+        # receive channel is in an inconsistent state when the handler
+        # returned without consuming it (e.g. auth dependency short-circuits).
+        if response.status_code in (401, 403) or response.status_code >= 400:
             return response
+
+        # Read request body only after confirming a successful response and
+        # only for methods that carry a body. FastAPI caches request._body
+        # during Pydantic model parsing, so request.body() is safe here.
+        body_bytes = b""
+        if request.method != "GET":
+            try:
+                body_bytes = await request.body()
+            except Exception:
+                pass
 
         # Parse request body for payload (best-effort).
         payload: dict | None = None

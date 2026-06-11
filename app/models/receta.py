@@ -37,6 +37,10 @@ class RecetaVersion(Base):
     pasos = relationship("RecetaPaso", back_populates="receta_version", cascade="all, delete-orphan")
     item_ventas = relationship("ItemVenta", back_populates="receta_version")
 
+    @property
+    def nombre_producto(self) -> str | None:
+        return self.producto.nombre if self.producto else None
+
 
 class RecetaDetalleInsumo(Base):
     """Línea de insumo directo dentro de una versión de receta."""

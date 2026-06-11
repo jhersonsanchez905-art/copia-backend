@@ -30,3 +30,4 @@ class Producto(Base):
     recetas = relationship("RecetaVersion", back_populates="producto")
     pedido_items = relationship("PedidoItem", back_populates="producto")
     item_ventas = relationship("ItemVenta", back_populates="producto")
+ 

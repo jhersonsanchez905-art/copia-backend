@@ -1,11 +1,9 @@
 """
 ajuste_inventario_service.py
-Lógica de negocio para ajustes manuales de inventario con flujo de aprobación.
-Autor: Ivan Ospino
-Issue: #21
+Async business logic for AjusteInventario with approval flow.
+Only Administrador role can approve or reject adjustments.
 """
 import datetime
-from decimal import Decimal
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,9 +12,9 @@ from app.exceptions import MajesaError, PermisoDenegadoError
 from app.models.ajuste_inventario import AjusteInventario
 from app.repositories import ajuste_inventario_repo, insumo_repo
 from app.schemas.ajuste_inventario_schema import (
-    AjusteInventarioAprobar,
-    AjusteInventarioRechazar,
+    AjusteInventarioAprobacion,
     AjusteInventarioCreate,
+    EstadoAjusteEnum,
 )
 from app.services import inventario_service
 
@@ -48,27 +46,30 @@ async def solicitar_ajuste(
     return ajuste
 
 
-async def aprobar_ajuste(
+async def resolver_ajuste(
     db: AsyncSession,
     id_ajuste: int,
-    data: AjusteInventarioAprobar,
+    data: AjusteInventarioAprobacion,
     id_usuario_aprueba: int,
     es_administrador: bool,
 ) -> AjusteInventario:
     if not es_administrador:
         raise PermisoDenegadoError()
 
+    if data.estado == EstadoAjusteEnum.pendiente:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="El estado de resolución debe ser 'aprobado' o 'rechazado'",
+        )
+
     ajuste = await ajuste_inventario_repo.get_ajuste_by_id(db, id_ajuste)
     if not ajuste:
         raise MajesaError(f"AjusteInventario {id_ajuste} no encontrado", 404)
     if ajuste.estado != "pendiente":
-        raise MajesaError(
-            f"Solo se pueden aprobar ajustes en estado pendiente. Estado actual: {ajuste.estado!r}",
-            400,
-        )
+        raise MajesaError("Este ajuste ya fue procesado", 409)
 
     update_data = {
-        "estado": "aprobado",
+        "estado": data.estado.value,
         "id_usuario_aprueba": id_usuario_aprueba,
         "fecha_resolucion": _now(),
     }
@@ -77,55 +78,24 @@ async def aprobar_ajuste(
 
     ajuste = await ajuste_inventario_repo.update_ajuste(db, ajuste, update_data)
 
-    if ajuste.cantidad >= 0:
-        await inventario_service.ingresar_stock(
-            db,
-            id_insumo=ajuste.id_insumo,
-            cantidad=ajuste.cantidad,
-            id_usuario=id_usuario_aprueba,
-            motivo=f"Ajuste aprobado: {ajuste.motivo}",
-        )
-    else:
-        await inventario_service.descontar_stock(
-            db,
-            id_insumo=ajuste.id_insumo,
-            cantidad=abs(ajuste.cantidad),
-            id_usuario=id_usuario_aprueba,
-            motivo=f"Ajuste aprobado: {ajuste.motivo}",
-        )
+    if data.estado == EstadoAjusteEnum.aprobado:
+        if ajuste.cantidad >= 0:
+            await inventario_service.ingresar_stock(
+                db,
+                id_insumo=ajuste.id_insumo,
+                cantidad=ajuste.cantidad,
+                id_usuario=id_usuario_aprueba,
+                motivo=f"Ajuste aprobado: {ajuste.motivo}",
+            )
+        else:
+            await inventario_service.descontar_stock(
+                db,
+                id_insumo=ajuste.id_insumo,
+                cantidad=abs(ajuste.cantidad),
+                id_usuario=id_usuario_aprueba,
+                motivo=f"Ajuste aprobado: {ajuste.motivo}",
+            )
 
-    await db.commit()
-    return ajuste
-
-
-async def rechazar_ajuste(
-    db: AsyncSession,
-    id_ajuste: int,
-    data: AjusteInventarioRechazar,
-    id_usuario_aprueba: int,
-    es_administrador: bool,
-) -> AjusteInventario:
-    if not es_administrador:
-        raise PermisoDenegadoError()
-
-    ajuste = await ajuste_inventario_repo.get_ajuste_by_id(db, id_ajuste)
-    if not ajuste:
-        raise MajesaError(f"AjusteInventario {id_ajuste} no encontrado", 404)
-    if ajuste.estado != "pendiente":
-        raise MajesaError(
-            f"Solo se pueden rechazar ajustes en estado pendiente. Estado actual: {ajuste.estado!r}",
-            400,
-        )
-
-    update_data = {
-        "estado": "rechazado",
-        "id_usuario_aprueba": id_usuario_aprueba,
-        "fecha_resolucion": _now(),
-    }
-    if data.observacion:
-        update_data["observacion"] = data.observacion
-
-    ajuste = await ajuste_inventario_repo.update_ajuste(db, ajuste, update_data)
     await db.commit()
     return ajuste
 
