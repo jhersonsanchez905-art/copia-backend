@@ -97,3 +97,8 @@ from app.models.auditoria import Auditoria
 
 
 
+# ── Módulo BI ─────────────────────────────────────────────────────────────────
+# This import exposes bi.* tables to Alembic's autogenerate.
+# Without it, autogenerate would propose DROP TABLE for all bi.* tables.
+# DO NOT REMOVE — BI module models must stay visible to SQLAlchemy metadata.
+import app.bi.models as _bi_models  # noqa: F401, E402
