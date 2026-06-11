@@ -65,6 +65,17 @@ class PagoResponse(BaseModel):
     estado_validacion: EstadoValidacionEnum
 
 
+class ValidarPagoRequest(BaseModel):
+    estado_validacion: EstadoValidacionEnum
+    id_usuario_validacion: int
+
+
+class PagoDetalleResponse(PagoResponse):
+    """Respuesta extendida con campos de validación."""
+    fecha_validacion: Optional[datetime] = None
+    id_usuario_validacion: Optional[int] = None
+
+
 # ── Factura ───────────────────────────────────────────────────────────────────
 
 class FacturaResponse(BaseModel):

@@ -7,7 +7,9 @@ Author: Suley Suarez / Johan Valero / Ivan Ospino / Carlos Espinel
 Issue: #1, #40
 """
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
+from app.config import settings
 from app.exceptions import MajesaError, majesa_exception_handler
 from app.middleware.auditoria import AuditoriaMiddleware
 from app.routers import (
@@ -20,6 +22,7 @@ from app.routers import (
     inventario,
     mesa,
     orden_compra,
+    pago,
     pedido,
     producto,
     proveedor,
@@ -61,6 +64,7 @@ app.include_router(orden_compra.router, prefix=_V1, tags=["Ordenes de Compra"])
 app.include_router(catalogo.router, prefix=_V1, tags=["Catalogo"])
 app.include_router(proveedor.router, prefix=_V1, tags=["Proveedores"])
 app.include_router(venta.router, prefix=f"{_V1}/ventas", tags=["Ventas"])
+app.include_router(pago.router, prefix=f"{_V1}/pagos", tags=["Pagos"])
 app.include_router(caja.router, prefix=f"{_V1}/caja", tags=["Caja"])
 app.include_router(inventario.router, prefix=f"{_V1}/inventario", tags=["Inventario"])
 app.include_router(ajuste_inventario.router, prefix=_V1)

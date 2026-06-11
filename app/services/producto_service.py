@@ -70,5 +70,5 @@ async def actualizar_producto(
 
 async def eliminar_producto(db: AsyncSession, producto_id: int) -> None:
     producto = await obtener_producto(db, producto_id)
-    await producto_repo.delete(db, producto)
+    await producto_repo.update(db, producto, {"activo": False})
     await db.commit()

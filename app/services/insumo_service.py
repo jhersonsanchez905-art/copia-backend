@@ -51,7 +51,7 @@ async def update_insumo(db: AsyncSession, id_insumo: int, data: InsumoUpdate) ->
 
 async def delete_insumo(db: AsyncSession, id_insumo: int) -> None:
     insumo = await get_insumo(db, id_insumo)
-    await insumo_repo.delete_insumo(db, insumo)
+    await insumo_repo.update_insumo(db, insumo, {"activo": False})
     await db.commit()
 
 
@@ -91,7 +91,7 @@ async def update_subreceta(
 
 async def delete_subreceta(db: AsyncSession, id_subreceta: int) -> None:
     subreceta = await get_subreceta(db, id_subreceta)
-    await insumo_repo.delete_subreceta(db, subreceta)
+    await insumo_repo.update_subreceta(db, subreceta, {"activo": False})
     await db.commit()
 
 

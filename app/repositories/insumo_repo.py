@@ -47,8 +47,7 @@ async def update_insumo(db: AsyncSession, insumo: Insumo, data: dict) -> Insumo:
 
 
 async def delete_insumo(db: AsyncSession, insumo: Insumo) -> None:
-    await db.delete(insumo)
-    await db.flush()
+    await update_insumo(db, insumo, {"activo": False})
 
 
 # ── Subreceta ─────────────────────────────────────────────────────────────────
@@ -93,8 +92,7 @@ async def update_subreceta(db: AsyncSession, subreceta: Subreceta, data: dict) -
 
 
 async def delete_subreceta(db: AsyncSession, subreceta: Subreceta) -> None:
-    await db.delete(subreceta)
-    await db.flush()
+    await update_subreceta(db, subreceta, {"activo": False})
 
 
 # ── SubrecetaIngrediente ──────────────────────────────────────────────────────
