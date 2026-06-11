@@ -4,7 +4,7 @@ Revision ID: 003
 Revises: 002
 Create Date: 2026-06-11
 """
-import sqlalchemy as sa
+
 from alembic import op
 
 revision = "003"
