@@ -39,6 +39,7 @@ class Usuario(Base):
     ventas = relationship("Venta", back_populates="usuario", foreign_keys="Venta.id_usuario")
     ordenes_compra = relationship("OrdenCompra", back_populates="usuario")
     reservas = relationship("Reserva", back_populates="usuario")
+    pedidos = relationship("Pedido", back_populates="usuario")
 
 
 class Cliente(Base):
