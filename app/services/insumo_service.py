@@ -11,7 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from app.exceptions import MajesaError
 from app.models.insumo import Insumo, Subreceta, SubrecetaIngrediente
-from app.models.receta import RecetaDetalleInsumo, RecetaDetalleSubreceta, RecetaVersion
+from app.models.receta import RecetaDetalleInsumo, RecetaDetalleSubreceta
 from app.repositories import insumo_repo
 from app.schemas.insumo_schema import (
     InsumoCreate,
