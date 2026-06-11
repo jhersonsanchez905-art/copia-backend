@@ -1,23 +1,59 @@
 """
 app/main.py
 Application entry point.
-Initializes FastAPI, registers routers and exception handlers.
-Author: Suley Suarez/ Johan Valero
+Initializes FastAPI, registers routers, middleware, and exception handlers.
+
+Author: Suley Suarez / Johan Valero / Ivan Ospino / Carlos Espinel
 Issue: #1, #40
 """
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.config import settings
 from app.exceptions import MajesaError, majesa_exception_handler
-from app.routers import insumo, orden_compra, producto, receta
-from app.routers.catalogo import router as catalogo_router
-from app.routers.proveedor import router as proveedor_router
+from app.middleware.auditoria import AuditoriaMiddleware
+from app.routers import (
+    ajuste_inventario,
+    alerta_perecible,
+    auth,
+    auditoria,
+    caja,
+    catalogo,
+    devolucion,
+    insumo,
+    inventario,
+    mesa,
+    orden_compra,
+    pedido,
+    producto,
+    proveedor,
+    receta,
+    reserva,
+    servicio_adicional,
+    stock,
+    venta,
+)
 
 app = FastAPI(
     title="Majesa API",
-    description="Sistema POS e Inventario — Cafeteria Majesa",
+    description="Sistema POS e Inventario — Cafetería Majesa",
     version="1.0.0",
 )
 
+# ── CORS ──────────────────────────────────────────────────────────────────────
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ── Middleware ────────────────────────────────────────────────────────────────
+app.add_middleware(AuditoriaMiddleware)
+
+# ── Exception handlers ────────────────────────────────────────────────────────
 app.add_exception_handler(MajesaError, majesa_exception_handler)
 
 # ── Routers ───────────────────────────────────────────────────────────────────
@@ -43,6 +79,7 @@ app.include_router(alerta_perecible.router, prefix=_V1)
 app.include_router(auditoria.router, prefix=_V1)
 app.include_router(devolucion.router, prefix=_V1)
 
-@app.get("/health")
+# ── Health Check ──────────────────────────────────────────────────────────────
+@app.get("/health", tags=["Health"])
 def health():
     return {"status": "ok", "project": "Majesa Backend"}
