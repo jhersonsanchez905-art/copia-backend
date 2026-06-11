@@ -35,7 +35,7 @@ async def apertura_activa(
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(require_rol("cajero", "administrador")),
 ):
-    return await caja_service.get_apertura_activa(db)
+    return await caja_service.get_apertura_activa(current_user.id_usuario, db)
 
 
 @router.post("/cierre", response_model=CierreCajaResponse, status_code=201)
