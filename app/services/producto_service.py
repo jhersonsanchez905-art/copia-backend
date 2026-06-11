@@ -6,12 +6,8 @@ Issue: #40
 """
 
 from fastapi import HTTPException, status
-from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.exceptions import MajesaError
 from app.models.producto import Producto
-from app.models.venta import ItemVenta
 from app.repositories import producto_repo
 from app.schemas.producto_schema import ProductoCreate, ProductoUpdate
 
