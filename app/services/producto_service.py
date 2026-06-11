@@ -6,9 +6,12 @@ Issue: #40
 """
 
 from fastapi import HTTPException, status
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.exceptions import MajesaError
 from app.models.producto import Producto
+from app.models.venta import ItemVenta
 from app.repositories import producto_repo
 from app.schemas.producto_schema import ProductoCreate, ProductoUpdate
 
@@ -70,5 +73,12 @@ async def actualizar_producto(
 
 async def eliminar_producto(db: AsyncSession, producto_id: int) -> None:
     producto = await obtener_producto(db, producto_id)
+    count = await db.scalar(
+        select(func.count()).where(ItemVenta.id_producto == producto_id)
+    )
+    if count:
+        raise MajesaError(
+            f"El producto tiene {count} venta(s) registrada(s) y no puede eliminarse", 409
+        )
     await producto_repo.delete(db, producto)
     await db.commit()

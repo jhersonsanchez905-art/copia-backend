@@ -6,8 +6,12 @@ RecetaDetalleSubreceta, and RecetaPaso.
 Rule: new recipe versions deactivate previous ones automatically.
 The historical version remains immutable as the truth of what was consumed.
 """
+from decimal import Decimal
+
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.receta import (
     RecetaVersion,
@@ -26,6 +30,33 @@ from app.schemas.receta_schema import (
     RecetaPasoCreate,
     RecetaPasoUpdate,
 )
+
+
+async def _calcular_costo_version(db: AsyncSession, version_id: int) -> Decimal:
+    """Suma el costo de insumos directos y subrecetas para una RecetaVersion."""
+    costo = Decimal("0")
+
+    res = await db.execute(
+        select(RecetaDetalleInsumo)
+        .options(selectinload(RecetaDetalleInsumo.insumo))
+        .where(RecetaDetalleInsumo.id_receta_version == version_id)
+    )
+    for d in res.scalars().all():
+        if d.insumo and d.insumo.precio_real is not None:
+            costo += d.cantidad * d.insumo.precio_real
+
+    res = await db.execute(
+        select(RecetaDetalleSubreceta)
+        .options(selectinload(RecetaDetalleSubreceta.subreceta))
+        .where(RecetaDetalleSubreceta.id_receta_version == version_id)
+    )
+    for d in res.scalars().all():
+        sub = d.subreceta
+        if sub and sub.costo_total is not None:
+            porciones = Decimal(str(sub.porciones or 1))
+            costo += d.cantidad * sub.costo_total / porciones
+
+    return costo
 
 
 # ── RecetaVersion ─────────────────────────────────────────────────────────────
@@ -86,6 +117,9 @@ async def crear_version(db: AsyncSession, payload: RecetaVersionCreate) -> Recet
     for p in payload.pasos:
         paso = RecetaPaso(id_receta_version=version.id_receta_version, **p.model_dump())
         await receta_repo.create_paso(db, paso)
+
+    await db.flush()
+    version.costo_total = await _calcular_costo_version(db, version.id_receta_version)
 
     await db.commit()
     return await receta_repo.get_version_by_id(db, version.id_receta_version)
