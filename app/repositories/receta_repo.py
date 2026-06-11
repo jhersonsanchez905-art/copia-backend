@@ -23,6 +23,7 @@ async def get_version_by_id(
     result = await db.execute(
         select(RecetaVersion)
         .options(
+            selectinload(RecetaVersion.producto),
             selectinload(RecetaVersion.detalles_insumo),
             selectinload(RecetaVersion.detalles_subreceta),
             selectinload(RecetaVersion.pasos),
@@ -58,6 +59,7 @@ async def get_versions_by_producto(
     query = (
         select(RecetaVersion)
         .options(
+            selectinload(RecetaVersion.producto),
             selectinload(RecetaVersion.detalles_insumo),
             selectinload(RecetaVersion.detalles_subreceta),
             selectinload(RecetaVersion.pasos),
@@ -67,6 +69,30 @@ async def get_versions_by_producto(
     if solo_vigente:
         query = query.where(RecetaVersion.vigente.is_(True))
     query = query.order_by(RecetaVersion.version.desc())
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+async def get_all_versions(
+    db: AsyncSession,
+    *,
+    solo_vigente: bool = False,
+    skip: int = 0,
+    limit: int = 50,
+) -> list[RecetaVersion]:
+    query = (
+        select(RecetaVersion)
+        .options(
+            selectinload(RecetaVersion.producto),
+            selectinload(RecetaVersion.detalles_insumo),
+            selectinload(RecetaVersion.detalles_subreceta),
+            selectinload(RecetaVersion.pasos),
+        )
+        .order_by(RecetaVersion.id_producto.asc(), RecetaVersion.version.desc())
+    )
+    if solo_vigente:
+        query = query.where(RecetaVersion.vigente.is_(True))
+    query = query.offset(skip).limit(limit)
     result = await db.execute(query)
     return list(result.scalars().all())
 

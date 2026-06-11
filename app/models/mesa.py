@@ -6,7 +6,7 @@ Issue: nuevo
 
 import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Numeric, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -48,6 +48,6 @@ class Reserva(Base):
     fecha_creacion = Column(DateTime(timezone=True), default=_now)
 
     mesa = relationship("Mesa", back_populates="reservas")
-    cliente = relationship("Cliente")
-    usuario = relationship("Usuario")
+    cliente = relationship("Cliente", back_populates="reservas")
+    usuario = relationship("Usuario", back_populates="reservas")
     pedido = relationship("Pedido", back_populates="reserva", uselist=False)

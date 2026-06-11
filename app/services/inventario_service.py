@@ -9,7 +9,6 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.exceptions import InsumoInsuficienteError
 from app.models.inventario import Alerta, MovimientoInventario
 from app.models.insumo import Insumo
 from app.models.stock import Stock

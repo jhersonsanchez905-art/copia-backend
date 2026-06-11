@@ -44,6 +44,7 @@ class Venta(Base):
     pagos = relationship("Pago", back_populates="venta", cascade="all, delete-orphan")
     factura = relationship("Factura", back_populates="venta", uselist=False)
     movimientos = relationship("MovimientoInventario", back_populates="venta")
+    devoluciones = relationship("Devolucion", back_populates="venta")
 
     def __repr__(self):
         return f"<Venta id={self.id_venta} estado={self.estado}>"
@@ -63,8 +64,8 @@ class ItemVenta(Base):
     subtotal = Column(Numeric(16, 2), nullable=False)
 
     venta = relationship("Venta", back_populates="items")
-    producto = relationship("Producto")
-    receta_version = relationship("RecetaVersion")
+    producto = relationship("Producto", back_populates="item_ventas")
+    receta_version = relationship("RecetaVersion", back_populates="item_ventas")
     devoluciones = relationship("Devolucion", back_populates="item_venta")
 
 
@@ -83,7 +84,7 @@ class Pago(Base):
     fecha_validacion = Column(DateTime(timezone=True), nullable=True)
 
     venta = relationship("Venta", back_populates="pagos")
-    metodo_pago = relationship("MetodoPago")
+    metodo_pago = relationship("MetodoPago", back_populates="pagos")
     usuario_validacion = relationship("Usuario", foreign_keys=[id_usuario_validacion])
 
 
@@ -117,6 +118,6 @@ class Devolucion(Base):
     reintegra_stock = Column(Integer, nullable=False, default=True)
     fecha = Column(DateTime(timezone=True), default=_now)
 
-    venta = relationship("Venta")
+    venta = relationship("Venta", back_populates="devoluciones")
     item_venta = relationship("ItemVenta", back_populates="devoluciones")
     aprobador = relationship("Usuario", foreign_keys=[id_aprobador])

@@ -35,6 +35,11 @@ class RecetaVersion(Base):
     detalles_insumo = relationship("RecetaDetalleInsumo", back_populates="receta_version", cascade="all, delete-orphan")
     detalles_subreceta = relationship("RecetaDetalleSubreceta", back_populates="receta_version", cascade="all, delete-orphan")
     pasos = relationship("RecetaPaso", back_populates="receta_version", cascade="all, delete-orphan")
+    item_ventas = relationship("ItemVenta", back_populates="receta_version")
+
+    @property
+    def nombre_producto(self) -> str | None:
+        return self.producto.nombre if self.producto else None
 
 
 class RecetaDetalleInsumo(Base):
