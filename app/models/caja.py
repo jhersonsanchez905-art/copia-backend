@@ -18,7 +18,11 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
-import datetime
+from datetime import datetime, timezone
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class AperturaCaja(Base):
@@ -40,8 +44,8 @@ class AperturaCaja(Base):
     monto_inicial = Column(Numeric, nullable=False)
 
     hora_apertura = Column(
-        DateTime,
-        default=datetime.datetime.utcnow,
+        DateTime(timezone=True),
+        default=_utcnow,
     )
 
     observaciones = Column(String)
@@ -88,8 +92,8 @@ class CierreCaja(Base):
     diferencia = Column(Numeric)
 
     hora_cierre = Column(
-        DateTime,
-        default=datetime.datetime.utcnow,
+        DateTime(timezone=True),
+        default=_utcnow,
     )
 
     observaciones = Column(String)
@@ -99,7 +103,7 @@ class CierreCaja(Base):
         back_populates="cierre",
     )
 
-    detalles = relationship(
+    detalle = relationship(
         "CierreCajaDetalle",
         back_populates="cierre",
         cascade="all, delete-orphan",
@@ -132,5 +136,5 @@ class CierreCajaDetalle(Base):
 
     cierre = relationship(
         "CierreCaja",
-        back_populates="detalles",
+        back_populates="detalle",
     )
