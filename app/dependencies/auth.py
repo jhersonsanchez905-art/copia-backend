@@ -1,22 +1,33 @@
+import asyncio
 import base64
 import json
 
-import httpx
+from jwt import ExpiredSignatureError, InvalidTokenError, PyJWKClient
+from jwt import decode as jwt_decode
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from app.config import settings
 from app.database import get_db
 from app.models.catalogo import Usuario
 
 _security = HTTPBearer(auto_error=False)
 
+# Cache PyJWKClient by issuer to avoid a new JWKS fetch on every request
+_jwks_clients: dict[str, PyJWKClient] = {}
+
+
+def _get_jwks_client(issuer: str) -> PyJWKClient:
+    if issuer not in _jwks_clients:
+        _jwks_clients[issuer] = PyJWKClient(
+            f"{issuer}/.well-known/jwks.json", cache_keys=True
+        )
+    return _jwks_clients[issuer]
+
 
 def _decode_payload_unsafe(token: str) -> dict:
-    """Extract JWT payload without signature verification — only used to read sid."""
     try:
         payload_b64 = token.split(".")[1]
         payload_b64 += "=" * (-len(payload_b64) % 4)
@@ -25,28 +36,37 @@ def _decode_payload_unsafe(token: str) -> dict:
         raise HTTPException(status_code=401, detail="Token malformado")
 
 
+def _verify_token_sync(token: str) -> str:
+    raw = _decode_payload_unsafe(token)
+    issuer = raw.get("iss", "")
+    jwks_client = _get_jwks_client(issuer)
+    signing_key = jwks_client.get_signing_key_from_jwt(token)
+    payload = jwt_decode(
+        token,
+        signing_key.key,
+        algorithms=["RS256"],
+        options={"verify_aud": False},
+        issuer=issuer,
+    )
+    if payload.get("sts") != "active":
+        raise HTTPException(status_code=401, detail="Sesion inactiva")
+    clerk_user_id = payload.get("sub")
+    if not clerk_user_id:
+        raise HTTPException(status_code=401, detail="Token sin sub")
+    return clerk_user_id
+
+
 async def _verify_session_with_clerk(token: str) -> str:
-    """
-    Calls Clerk's session verify endpoint to validate the JWT and check the
-    session is still active. Returns the Clerk user ID on success.
-    """
-    payload = _decode_payload_unsafe(token)
-    session_id = payload.get("sid")
-    if not session_id:
-        raise HTTPException(status_code=401, detail="Token sin session ID")
-
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            f"https://api.clerk.com/v1/sessions/{session_id}/verify",
-            json={"token": token},
-            headers={"Authorization": f"Bearer {settings.CLERK_SECRET_KEY}"},
-            timeout=10.0,
-        )
-
-    if resp.status_code != 200:
-        raise HTTPException(status_code=401, detail="Sesión inválida o expirada")
-
-    return resp.json()["user_id"]
+    try:
+        return await asyncio.to_thread(_verify_token_sync, token)
+    except ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expirado")
+    except InvalidTokenError as e:
+        raise HTTPException(status_code=401, detail=f"Token invalido: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Error verificando token: {e}")
 
 
 async def get_current_user(
@@ -54,7 +74,7 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db),
 ) -> Usuario:
     if credentials is None:
-        raise HTTPException(status_code=401, detail="Token de autorización requerido")
+        raise HTTPException(status_code=401, detail="Token de autorizacion requerido")
 
     clerk_user_id = await _verify_session_with_clerk(credentials.credentials)
 
