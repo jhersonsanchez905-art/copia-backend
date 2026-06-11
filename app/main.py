@@ -10,7 +10,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-
 from app.exceptions import MajesaError, majesa_exception_handler
 from app.middleware.auditoria import AuditoriaMiddleware
 from app.routers import (
@@ -32,6 +31,10 @@ from app.routers import (
     stock,
     venta,
 )
+
+# ── Módulo BI ─────────────────────────────────────────────────────────────────
+# BI module router — only the BI team should modify app/bi/
+from app.bi import router as bi_router
 
 app = FastAPI(
     title="Majesa API",
@@ -75,7 +78,12 @@ app.include_router(servicio_adicional.router, prefix=_V1)
 app.include_router(alerta_perecible.router, prefix=_V1)
 app.include_router(auditoria.router, prefix=_V1)
 
+# ── BI Module ─────────────────────────────────────────────────────────────────
+# BI module endpoints — only the BI team should modify app/bi/
+app.include_router(bi_router.router, prefix=_V1)
+
 
 @app.get("/health", tags=["Health"])
 def health():
+    """Return service health status."""
     return {"status": "ok", "project": "Majesa Backend"}
