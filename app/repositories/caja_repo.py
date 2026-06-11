@@ -7,11 +7,13 @@ Only database queries here, no business logic.
 Author: Suley Suarez
 Issue: #16
 """
+from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 from typing import Optional
 from app.models.caja import AperturaCaja, CierreCaja, CierreCajaDetalle
+from app.models.venta import Pago, Venta
 
 
 async def create_apertura(apertura: AperturaCaja, db: AsyncSession) -> AperturaCaja:
@@ -57,6 +59,36 @@ async def get_apertura_sin_cierre(id_usuario: int, db: AsyncSession) -> Optional
         .limit(1)
     )
     return result.scalar_one_or_none()
+
+
+async def get_total_ventas_by_apertura(id_apertura: int, db: AsyncSession) -> Decimal:
+    """Sum of all completed sale totals for a given apertura."""
+    result = await db.execute(
+        select(func.coalesce(func.sum(Venta.total), 0)).where(
+            Venta.id_apertura == id_apertura,
+            Venta.estado == "completada",
+        )
+    )
+    return Decimal(str(result.scalar_one()))
+
+
+async def get_totales_por_metodo_pago(
+    id_apertura: int, db: AsyncSession
+) -> dict[int, Decimal]:
+    """Sum of payment amounts grouped by id_metodo_pago for a given apertura."""
+    result = await db.execute(
+        select(
+            Pago.id_metodo_pago,
+            func.coalesce(func.sum(Pago.monto), 0),
+        )
+        .join(Venta, Venta.id_venta == Pago.id_venta)
+        .where(
+            Venta.id_apertura == id_apertura,
+            Venta.estado == "completada",
+        )
+        .group_by(Pago.id_metodo_pago)
+    )
+    return {row[0]: Decimal(str(row[1])) for row in result.all()}
 
 
 async def create_cierre(cierre: CierreCaja, db: AsyncSession) -> CierreCaja:

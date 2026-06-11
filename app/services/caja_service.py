@@ -25,8 +25,16 @@ async def abrir_caja(
     Open a new cash register shift.
 
     Raises:
-        MajesaError: If there is already an open shift for this user.
+        MajesaError: If there is already an open (unclosed) shift for this user.
     """
+    existente = await caja_repo.get_apertura_sin_cierre(id_usuario, db)
+    if existente:
+        raise MajesaError(
+            f"Ya existe una apertura activa (id={existente.id_apertura}) para este usuario. "
+            "Cierra el turno actual antes de abrir uno nuevo.",
+            409,
+        )
+
     apertura = AperturaCaja(
         id_usuario=id_usuario,
         turno=data.turno,
@@ -53,7 +61,7 @@ async def cerrar_caja(
 ) -> CierreCaja:
     """
     Close the active cash register shift for the current user.
-    Compares counted amounts per payment method against expected totals from sales.
+    Calculates expected totals from completed sales and compares with counted amounts.
 
     Raises:
         MajesaError: If there is no active opening for this user.
@@ -62,10 +70,18 @@ async def cerrar_caja(
     if not apertura:
         raise MajesaError("No hay apertura de caja activa para este usuario", 404)
 
+    total_transacciones = await caja_repo.get_total_ventas_by_apertura(
+        apertura.id_apertura, db
+    )
+    totales_por_metodo = await caja_repo.get_totales_por_metodo_pago(
+        apertura.id_apertura, db
+    )
+
     total_contado = sum(
         (d.total_contado for d in data.detalle),
         Decimal(0),
     )
+    diferencia_general = total_contado - total_transacciones
 
     cierre = CierreCaja(
         id_apertura=apertura.id_apertura,
@@ -73,15 +89,15 @@ async def cerrar_caja(
         turno=apertura.turno,
         fecha=apertura.fecha,
         total_general=total_contado,
-        total_transacciones=Decimal(0),  # TODO: calcular desde ventas del turno
-        diferencia=Decimal(0),           # TODO: calcular vs total_transacciones
+        total_transacciones=total_transacciones,
+        diferencia=diferencia_general,
         hora_cierre=datetime.now(timezone.utc),
         observaciones=data.observaciones,
     )
     cierre = await caja_repo.create_cierre(cierre, db)
 
     for d in data.detalle:
-        total_esperado = Decimal(0)  # TODO: calcular desde pagos del turno
+        total_esperado = totales_por_metodo.get(d.id_metodo_pago, Decimal(0))
         await caja_repo.create_cierre_detalle(
             CierreCajaDetalle(
                 id_cierre=cierre.id_cierre,
@@ -93,7 +109,6 @@ async def cerrar_caja(
             db,
         )
 
-    # Reload with detalle eagerly populated to avoid MissingGreenlet on serialization.
     return await caja_repo.get_cierre_by_apertura(apertura.id_apertura, db)
 
 
