@@ -5,13 +5,12 @@ Async business logic for Insumo, Subreceta, and SubrecetaIngrediente.
 from decimal import Decimal
 
 from fastapi import HTTPException, status
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.exceptions import MajesaError
 from app.models.insumo import Insumo, Subreceta, SubrecetaIngrediente
-from app.models.receta import RecetaDetalleInsumo, RecetaDetalleSubreceta
+from app.models.receta import RecetaDetalleSubreceta
 from app.repositories import insumo_repo
 from app.schemas.insumo_schema import (
     InsumoCreate,
