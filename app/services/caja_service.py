@@ -10,7 +10,7 @@ Issue: #16
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 from app.schemas.caja_schema import AperturaCajaRequest, CierreCajaRequest
-from app.repositories import caja_repo, venta_repo
+from app.repositories import caja_repo
 from app.models.caja import AperturaCaja, CierreCaja, CierreCajaDetalle
 from app.exceptions import MajesaError
 

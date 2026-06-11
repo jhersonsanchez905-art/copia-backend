@@ -4,8 +4,6 @@ Services are mocked to isolate HTTP layer behavior from business logic.
 """
 from unittest.mock import AsyncMock, patch
 
-import pytest
-
 from app.exceptions import MajesaError
 
 

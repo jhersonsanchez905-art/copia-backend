@@ -4,7 +4,6 @@ Async business logic for AjusteInventario with approval flow.
 Only Administrador role can approve or reject adjustments.
 """
 import datetime
-from decimal import Decimal
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession

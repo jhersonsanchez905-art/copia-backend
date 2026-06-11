@@ -17,7 +17,7 @@ import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import MajesaError, PermisoDenegadoError
-from app.models.mesa import Mesa, Reserva
+from app.models.mesa import Reserva
 from app.repositories import mesa_repo, reserva_repo
 from app.schemas.reserva_schema import ReservaCreate, ReservaUpdate
 

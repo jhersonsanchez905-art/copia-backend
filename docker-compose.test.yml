@@ -1,0 +1,13 @@
+version: "3.9"
+
+services:
+  test:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+asyncpg://test:test@localhost/majesa_test
+      CLERK_SECRET_KEY: test-fake-key
+      RESEND_API_KEY: not-configured
+      CLOUDINARY_URL: not-configured
+      CRON_SECRET: not-configured
+      GOOGLE_SHEETS_ID: not-configured
+    command: pytest tests/ -v --tb=short

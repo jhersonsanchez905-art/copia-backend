@@ -10,7 +10,6 @@ Issue: #1, #40
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import settings
 from app.exceptions import MajesaError, majesa_exception_handler
 from app.middleware.auditoria import AuditoriaMiddleware
 from app.routers import (
