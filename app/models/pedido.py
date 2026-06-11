@@ -68,4 +68,4 @@ class PedidoServicio(Base):
     observaciones = Column(String)
 
     pedido = relationship("Pedido", back_populates="servicios")
-    servicio = relationship("ServicioAdicional")
+    servicio = relationship("ServicioAdicional", back_populates="pedido_servicios")

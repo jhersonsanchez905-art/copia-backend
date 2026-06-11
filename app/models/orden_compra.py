@@ -60,4 +60,4 @@ class OrdenCompraDetalle(Base):
     fecha_actualizacion = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
     orden_compra = relationship("OrdenCompra", back_populates="detalles")
-    insumo = relationship("Insumo")
+    insumo = relationship("Insumo", back_populates="orden_compra_detalles")
