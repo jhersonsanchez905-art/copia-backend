@@ -1,83 +1,100 @@
 """
 receta_service.py
-Lógica de negocio para RecetaVersion, RecetaDetalle y RecetaPaso.
+Async business logic for RecetaVersion, RecetaDetalleInsumo,
+RecetaDetalleSubreceta, and RecetaPaso.
 
-Regla de negocio clave (Plan de Desarrollo §2.1):
-  «Recetas versionadas: los cambios en recetas aplican a ventas futuras.
-   El histórico permanece inmutable como verdad de lo que realmente se consumió.»
-
-Al crear una nueva versión se desactivan las anteriores automáticamente.
-Autor SebastianValero12
-Issue: #40
+Rule: new recipe versions deactivate previous ones automatically.
+The historical version remains immutable as the truth of what was consumed.
 """
+from decimal import Decimal
 
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from app.models.receta import RecetaVersion, RecetaDetalle, RecetaPaso
+from app.models.receta import (
+    RecetaVersion,
+    RecetaDetalleInsumo,
+    RecetaDetalleSubreceta,
+    RecetaPaso,
+)
 from app.repositories import receta_repo, producto_repo
 from app.schemas.receta_schema import (
     RecetaVersionCreate,
     RecetaVersionUpdate,
-    RecetaDetalleCreate,
-    RecetaDetalleUpdate,
+    RecetaDetalleInsumoCreate,
+    RecetaDetalleInsumoUpdate,
+    RecetaDetalleSubrecetaCreate,
+    RecetaDetalleSubrecetaUpdate,
     RecetaPasoCreate,
     RecetaPasoUpdate,
 )
 
 
-# ── RecetaVersion ───────────────────────────────────────────
+async def _calcular_costo_version(db: AsyncSession, version_id: int) -> Decimal:
+    """Suma el costo de insumos directos y subrecetas para una RecetaVersion."""
+    costo = Decimal("0")
+
+    res = await db.execute(
+        select(RecetaDetalleInsumo)
+        .options(selectinload(RecetaDetalleInsumo.insumo))
+        .where(RecetaDetalleInsumo.id_receta_version == version_id)
+    )
+    for d in res.scalars().all():
+        if d.insumo and d.insumo.precio_real is not None:
+            costo += d.cantidad * d.insumo.precio_real
+
+    res = await db.execute(
+        select(RecetaDetalleSubreceta)
+        .options(selectinload(RecetaDetalleSubreceta.subreceta))
+        .where(RecetaDetalleSubreceta.id_receta_version == version_id)
+    )
+    for d in res.scalars().all():
+        sub = d.subreceta
+        if sub and sub.costo_total is not None:
+            porciones = Decimal(str(sub.porciones or 1))
+            costo += d.cantidad * sub.costo_total / porciones
+
+    return costo
+
+
+# ── RecetaVersion ─────────────────────────────────────────────────────────────
+
+async def listar_todas_las_versiones(
+    db: AsyncSession,
+    *,
+    solo_vigente: bool = False,
+    skip: int = 0,
+    limit: int = 50,
+) -> list[RecetaVersion]:
+    return await receta_repo.get_all_versions(db, solo_vigente=solo_vigente, skip=skip, limit=limit)
+
 
 async def listar_versiones(
     db: AsyncSession, producto_id: int, *, solo_vigente: bool = False
 ) -> list[RecetaVersion]:
     producto = await producto_repo.get_by_id(db, producto_id)
     if producto is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Producto {producto_id} no encontrado",
-        )
-    return await receta_repo.get_versions_by_producto(
-        db, producto_id, solo_vigente=solo_vigente
-    )
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"Producto {producto_id} no encontrado")
+    return await receta_repo.get_versions_by_producto(db, producto_id, solo_vigente=solo_vigente)
 
 
-async def obtener_version(
-    db: AsyncSession, version_id: int
-) -> RecetaVersion:
+async def obtener_version(db: AsyncSession, version_id: int) -> RecetaVersion:
     version = await receta_repo.get_version_by_id(db, version_id)
     if version is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"RecetaVersion {version_id} no encontrada",
-        )
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"RecetaVersion {version_id} no encontrada")
     return version
 
 
-async def crear_version(
-    db: AsyncSession, payload: RecetaVersionCreate
-) -> RecetaVersion:
-    """
-    Crea una nueva versión de receta para un producto.
-    - Calcula el próximo número de versión automáticamente.
-    - Desactiva las versiones vigentes anteriores.
-    - Crea detalles y pasos en cascada dentro de la misma transacción.
-    """
-    # Validar que el producto existe
+async def crear_version(db: AsyncSession, payload: RecetaVersionCreate) -> RecetaVersion:
     producto = await producto_repo.get_by_id(db, payload.id_producto)
     if producto is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Producto {payload.id_producto} no encontrado",
-        )
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"Producto {payload.id_producto} no encontrado")
 
-    # Desactivar versiones anteriores y calcular nuevo número
     await receta_repo.deactivate_current_versions(db, payload.id_producto)
-    next_version = await receta_repo.get_next_version_number(
-        db, payload.id_producto
-    )
+    next_version = await receta_repo.get_next_version_number(db, payload.id_producto)
 
-    # Crear la versión
     version = RecetaVersion(
         id_producto=payload.id_producto,
         version=next_version,
@@ -89,90 +106,106 @@ async def crear_version(
     )
     version = await receta_repo.create_version(db, version)
 
-    # Crear detalles
-    for d in payload.detalles:
-        detalle = RecetaDetalle(
-            id_receta_version=version.id_receta_version,
-            **d.model_dump(),
-        )
-        await receta_repo.create_detalle(db, detalle)
+    for d in payload.detalles_insumo:
+        detalle = RecetaDetalleInsumo(id_receta_version=version.id_receta_version, **d.model_dump())
+        await receta_repo.create_detalle_insumo(db, detalle)
 
-    # Crear pasos
+    for d in payload.detalles_subreceta:
+        detalle = RecetaDetalleSubreceta(id_receta_version=version.id_receta_version, **d.model_dump())
+        await receta_repo.create_detalle_subreceta(db, detalle)
+
     for p in payload.pasos:
-        paso = RecetaPaso(
-            id_receta_version=version.id_receta_version,
-            **p.model_dump(),
-        )
+        paso = RecetaPaso(id_receta_version=version.id_receta_version, **p.model_dump())
         await receta_repo.create_paso(db, paso)
 
-    await db.commit()
+    await db.flush()
+    version.costo_total = await _calcular_costo_version(db, version.id_receta_version)
 
-    # Recargar con relaciones
+    await db.commit()
     return await receta_repo.get_version_by_id(db, version.id_receta_version)
 
 
 async def actualizar_version(
     db: AsyncSession, version_id: int, payload: RecetaVersionUpdate
 ) -> RecetaVersion:
-    """Actualiza solo los metadatos de una versión (no detalles ni pasos)."""
     version = await obtener_version(db, version_id)
     data = payload.model_dump(exclude_unset=True)
     if not data:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="No se enviaron campos para actualizar",
-        )
-    version = await receta_repo.update_version(db, version, data)
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No se enviaron campos para actualizar")
+    await receta_repo.update_version(db, version, data)
     await db.commit()
     return await receta_repo.get_version_by_id(db, version.id_receta_version)
 
 
-# ── RecetaDetalle ───────────────────────────────────────────
+# ── RecetaDetalleInsumo ───────────────────────────────────────────────────────
 
-async def agregar_detalle(
-    db: AsyncSession, version_id: int, payload: RecetaDetalleCreate
-) -> RecetaDetalle:
+async def agregar_detalle_insumo(
+    db: AsyncSession, version_id: int, payload: RecetaDetalleInsumoCreate
+) -> RecetaDetalleInsumo:
     await obtener_version(db, version_id)
-    detalle = RecetaDetalle(
-        id_receta_version=version_id, **payload.model_dump()
-    )
-    detalle = await receta_repo.create_detalle(db, detalle)
+    detalle = RecetaDetalleInsumo(id_receta_version=version_id, **payload.model_dump())
+    detalle = await receta_repo.create_detalle_insumo(db, detalle)
     await db.commit()
     return detalle
 
 
-async def actualizar_detalle(
-    db: AsyncSession, detalle_id: int, payload: RecetaDetalleUpdate
-) -> RecetaDetalle:
-    detalle = await receta_repo.get_detalle_by_id(db, detalle_id)
+async def actualizar_detalle_insumo(
+    db: AsyncSession, detalle_id: int, payload: RecetaDetalleInsumoUpdate
+) -> RecetaDetalleInsumo:
+    detalle = await receta_repo.get_detalle_insumo_by_id(db, detalle_id)
     if detalle is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"RecetaDetalle {detalle_id} no encontrado",
-        )
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"RecetaDetalleInsumo {detalle_id} no encontrado")
     data = payload.model_dump(exclude_unset=True)
     if not data:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="No se enviaron campos para actualizar",
-        )
-    detalle = await receta_repo.update_detalle(db, detalle, data)
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No se enviaron campos para actualizar")
+    detalle = await receta_repo.update_detalle_insumo(db, detalle, data)
     await db.commit()
     return detalle
 
 
-async def eliminar_detalle(db: AsyncSession, detalle_id: int) -> None:
-    detalle = await receta_repo.get_detalle_by_id(db, detalle_id)
+async def eliminar_detalle_insumo(db: AsyncSession, detalle_id: int) -> None:
+    detalle = await receta_repo.get_detalle_insumo_by_id(db, detalle_id)
     if detalle is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"RecetaDetalle {detalle_id} no encontrado",
-        )
-    await receta_repo.delete_detalle(db, detalle)
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"RecetaDetalleInsumo {detalle_id} no encontrado")
+    await receta_repo.delete_detalle_insumo(db, detalle)
     await db.commit()
 
 
-# ── RecetaPaso ──────────────────────────────────────────────
+# ── RecetaDetalleSubreceta ────────────────────────────────────────────────────
+
+async def agregar_detalle_subreceta(
+    db: AsyncSession, version_id: int, payload: RecetaDetalleSubrecetaCreate
+) -> RecetaDetalleSubreceta:
+    await obtener_version(db, version_id)
+    detalle = RecetaDetalleSubreceta(id_receta_version=version_id, **payload.model_dump())
+    detalle = await receta_repo.create_detalle_subreceta(db, detalle)
+    await db.commit()
+    return detalle
+
+
+async def actualizar_detalle_subreceta(
+    db: AsyncSession, detalle_id: int, payload: RecetaDetalleSubrecetaUpdate
+) -> RecetaDetalleSubreceta:
+    detalle = await receta_repo.get_detalle_subreceta_by_id(db, detalle_id)
+    if detalle is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"RecetaDetalleSubreceta {detalle_id} no encontrado")
+    data = payload.model_dump(exclude_unset=True)
+    if not data:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No se enviaron campos para actualizar")
+    detalle = await receta_repo.update_detalle_subreceta(db, detalle, data)
+    await db.commit()
+    return detalle
+
+
+async def eliminar_detalle_subreceta(db: AsyncSession, detalle_id: int) -> None:
+    detalle = await receta_repo.get_detalle_subreceta_by_id(db, detalle_id)
+    if detalle is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"RecetaDetalleSubreceta {detalle_id} no encontrado")
+    await receta_repo.delete_detalle_subreceta(db, detalle)
+    await db.commit()
+
+
+# ── RecetaPaso ────────────────────────────────────────────────────────────────
 
 async def agregar_paso(
     db: AsyncSession, version_id: int, payload: RecetaPasoCreate
@@ -189,16 +222,10 @@ async def actualizar_paso(
 ) -> RecetaPaso:
     paso = await receta_repo.get_paso_by_id(db, paso_id)
     if paso is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"RecetaPaso {paso_id} no encontrado",
-        )
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"RecetaPaso {paso_id} no encontrado")
     data = payload.model_dump(exclude_unset=True)
     if not data:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="No se enviaron campos para actualizar",
-        )
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No se enviaron campos para actualizar")
     paso = await receta_repo.update_paso(db, paso, data)
     await db.commit()
     return paso
@@ -207,9 +234,6 @@ async def actualizar_paso(
 async def eliminar_paso(db: AsyncSession, paso_id: int) -> None:
     paso = await receta_repo.get_paso_by_id(db, paso_id)
     if paso is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"RecetaPaso {paso_id} no encontrado",
-        )
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"RecetaPaso {paso_id} no encontrado")
     await receta_repo.delete_paso(db, paso)
     await db.commit()

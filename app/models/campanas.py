@@ -5,7 +5,7 @@ Autor: charlykj
 Issue: #18
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, Numeric, Date, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Numeric, Date, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from app.database import Base
 import datetime

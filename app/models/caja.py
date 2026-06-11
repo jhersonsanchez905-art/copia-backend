@@ -48,7 +48,7 @@ class AperturaCaja(Base):
 
     ventas = relationship(
         "Venta",
-        backref="apertura",
+        back_populates="apertura",
     )
 
     cierre = relationship(

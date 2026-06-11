@@ -1,34 +1,33 @@
 """
 receta_schema.py
-Esquemas Pydantic para el CRUD de RecetaVersion, RecetaDetalle y RecetaPaso.
-Autor: SebastianValero12
-Issue: #40
+Pydantic schemas for RecetaVersion, RecetaDetalleInsumo,
+RecetaDetalleSubreceta, and RecetaPaso.
+RecetaDetalle is split into two separate schemas matching the finalized models.
 """
-
 from datetime import datetime
 from decimal import Decimal
+from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
-# ── RecetaPaso ──────────────────────────────────────────────
+# ── RecetaPaso ──────────────────────────────────────────────────────────────
 
 class RecetaPasoBase(BaseModel):
     numero_paso: int = Field(..., ge=1)
     titulo: str = Field(..., min_length=1, max_length=200)
-    descripcion: str | None = None
-    tiempo_estimado_min: int | None = Field(None, ge=0)
+    descripcion: Optional[str] = None
+    tiempo_estimado_min: Optional[int] = Field(None, ge=0)
 
 
 class RecetaPasoCreate(RecetaPasoBase):
-    """Se usa dentro de RecetaVersionCreate (sin id_receta_version)."""
     pass
 
 
 class RecetaPasoUpdate(BaseModel):
-    numero_paso: int | None = Field(None, ge=1)
-    titulo: str | None = Field(None, min_length=1, max_length=200)
-    descripcion: str | None = None
-    tiempo_estimado_min: int | None = Field(None, ge=0)
+    numero_paso: Optional[int] = Field(None, ge=1)
+    titulo: Optional[str] = Field(None, min_length=1, max_length=200)
+    descripcion: Optional[str] = None
+    tiempo_estimado_min: Optional[int] = Field(None, ge=0)
 
 
 class RecetaPasoResponse(RecetaPasoBase):
@@ -38,62 +37,85 @@ class RecetaPasoResponse(RecetaPasoBase):
     id_receta_version: int
 
 
-# ── RecetaDetalle ───────────────────────────────────────────
+# ── RecetaDetalleInsumo ─────────────────────────────────────────────────────
 
-class RecetaDetalleBase(BaseModel):
-    id_insumo: int | None = None
-    id_subreceta: int | None = None
+class RecetaDetalleInsumoBase(BaseModel):
+    id_insumo: int
     id_unidad: int
     cantidad: Decimal = Field(..., gt=0)
-    costo_unitario: Decimal | None = None
-    costo_total: Decimal | None = None
-    pct_participacion: Decimal | None = None
+    costo_unitario: Optional[Decimal] = None
+    costo_total: Optional[Decimal] = None
+    pct_participacion: Optional[Decimal] = None
 
 
-class RecetaDetalleCreate(RecetaDetalleBase):
-    """Se usa dentro de RecetaVersionCreate (sin id_receta_version)."""
+class RecetaDetalleInsumoCreate(RecetaDetalleInsumoBase):
     pass
 
 
-class RecetaDetalleUpdate(BaseModel):
-    id_insumo: int | None = None
-    id_subreceta: int | None = None
-    id_unidad: int | None = None
-    cantidad: Decimal | None = Field(None, gt=0)
-    costo_unitario: Decimal | None = None
-    costo_total: Decimal | None = None
-    pct_participacion: Decimal | None = None
+class RecetaDetalleInsumoUpdate(BaseModel):
+    id_insumo: Optional[int] = None
+    id_unidad: Optional[int] = None
+    cantidad: Optional[Decimal] = Field(None, gt=0)
+    costo_unitario: Optional[Decimal] = None
+    costo_total: Optional[Decimal] = None
+    pct_participacion: Optional[Decimal] = None
 
 
-class RecetaDetalleResponse(RecetaDetalleBase):
+class RecetaDetalleInsumoResponse(RecetaDetalleInsumoBase):
     model_config = ConfigDict(from_attributes=True)
 
-    id_receta_detalle: int
+    id_receta_detalle_insumo: int
     id_receta_version: int
 
 
-# ── RecetaVersion ───────────────────────────────────────────
+# ── RecetaDetalleSubreceta ──────────────────────────────────────────────────
+
+class RecetaDetalleSubrecetaBase(BaseModel):
+    id_subreceta: int
+    id_unidad: int
+    cantidad: Decimal = Field(..., gt=0)
+    costo_unitario: Optional[Decimal] = None
+    costo_total: Optional[Decimal] = None
+    pct_participacion: Optional[Decimal] = None
+
+
+class RecetaDetalleSubrecetaCreate(RecetaDetalleSubrecetaBase):
+    pass
+
+
+class RecetaDetalleSubrecetaUpdate(BaseModel):
+    id_subreceta: Optional[int] = None
+    id_unidad: Optional[int] = None
+    cantidad: Optional[Decimal] = Field(None, gt=0)
+    costo_unitario: Optional[Decimal] = None
+    costo_total: Optional[Decimal] = None
+    pct_participacion: Optional[Decimal] = None
+
+
+class RecetaDetalleSubrecetaResponse(RecetaDetalleSubrecetaBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id_receta_detalle_subreceta: int
+    id_receta_version: int
+
+
+# ── RecetaVersion ───────────────────────────────────────────────────────────
 
 class RecetaVersionBase(BaseModel):
-    costo_total: Decimal | None = None
-    tiempo_preparacion_min: int | None = Field(None, ge=0)
-    instrucciones_generales: str | None = None
-    observaciones: str | None = None
+    costo_total: Optional[Decimal] = None
+    tiempo_preparacion_min: Optional[int] = Field(None, ge=0)
+    instrucciones_generales: Optional[str] = None
+    observaciones: Optional[str] = None
 
 
 class RecetaVersionCreate(RecetaVersionBase):
-    """
-    Crea una nueva versión de receta para un producto.
-    El número de versión se calcula automáticamente.
-    Los detalles y pasos se crean en cascada.
-    """
     id_producto: int
-    detalles: list[RecetaDetalleCreate] = Field(default_factory=list)
+    detalles_insumo: list[RecetaDetalleInsumoCreate] = Field(default_factory=list)
+    detalles_subreceta: list[RecetaDetalleSubrecetaCreate] = Field(default_factory=list)
     pasos: list[RecetaPasoCreate] = Field(default_factory=list)
 
 
 class RecetaVersionUpdate(RecetaVersionBase):
-    """Solo actualiza metadatos de la versión (no detalles ni pasos)."""
     pass
 
 
@@ -102,8 +124,10 @@ class RecetaVersionResponse(RecetaVersionBase):
 
     id_receta_version: int
     id_producto: int
+    nombre_producto: Optional[str] = None
     version: int
     vigente: bool
-    fecha_creacion: datetime | None = None
-    detalles: list[RecetaDetalleResponse] = []
+    fecha_creacion: Optional[datetime] = None
+    detalles_insumo: list[RecetaDetalleInsumoResponse] = []
+    detalles_subreceta: list[RecetaDetalleSubrecetaResponse] = []
     pasos: list[RecetaPasoResponse] = []
