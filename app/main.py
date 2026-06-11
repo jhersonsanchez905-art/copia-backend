@@ -64,7 +64,7 @@ app.include_router(producto.router, prefix=_V1, tags=["Productos"])
 app.include_router(receta.router, prefix=_V1)
 app.include_router(insumo.router, prefix=_V1)
 app.include_router(orden_compra.router, prefix=_V1, tags=["Ordenes de Compra"])
-app.include_router(catalogo.router, prefix=_V1, tags=["Catalogo"])
+app.include_router(catalogo.router, prefix=_V1)
 app.include_router(proveedor.router, prefix=_V1, tags=["Proveedores"])
 app.include_router(venta.router, prefix=f"{_V1}/ventas", tags=["Ventas"])
 app.include_router(caja.router, prefix=f"{_V1}/caja", tags=["Caja"])
@@ -82,7 +82,4 @@ app.include_router(devolucion.router, prefix=_V1)
 # ── Health Check ──────────────────────────────────────────────────────────────
 @app.get("/health", tags=["Health"])
 def health():
-    return {
-        "status": "ok",
-        "project": "Majesa Backend",
-    }
+    return {"status": "ok", "project": "Majesa Backend"}
