@@ -15,10 +15,19 @@ from app.schemas.caja_schema import (
     AperturaCajaResponse,
     CierreCajaRequest,
     CierreCajaResponse,
+    DenominacionResponse,
 )
 from app.services import caja_service
 
 router = APIRouter()
+
+
+@router.get("/denominaciones", response_model=list[DenominacionResponse])
+async def listar_denominaciones(
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("cajero", "administrador")),
+):
+    return await caja_service.get_denominaciones(db)
 
 
 @router.post("/apertura", response_model=AperturaCajaResponse, status_code=201)
@@ -61,4 +70,4 @@ async def obtener_cierre(
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(require_rol("administrador")),
 ):
-    return await caja_service.get_cierre(db, id_cierre)
+    return await caja_service.get_cierre(id_cierre, db)

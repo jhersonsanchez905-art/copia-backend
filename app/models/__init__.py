@@ -56,8 +56,11 @@ from app.models.pedido import Pedido, PedidoItem, PedidoServicio
  
 # caja — depende de usuario
 from app.models.caja import (
+    Denominacion,
     AperturaCaja,
+    AperturaCajaArqueo,
     CierreCaja,
+    CierreCajaArqueo,
     CierreCajaDetalle,
 )
  
