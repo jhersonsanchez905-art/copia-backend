@@ -3,9 +3,12 @@ insumo_service.py
 Async business logic for Insumo, Subreceta, and SubrecetaIngrediente.
 """
 from fastapi import HTTPException, status
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.exceptions import MajesaError
 from app.models.insumo import Insumo, Subreceta, SubrecetaIngrediente
+from app.models.receta import RecetaDetalleInsumo, RecetaDetalleSubreceta, RecetaVersion
 from app.repositories import insumo_repo
 from app.schemas.insumo_schema import (
     InsumoCreate,
@@ -51,6 +54,11 @@ async def update_insumo(db: AsyncSession, id_insumo: int, data: InsumoUpdate) ->
 
 async def delete_insumo(db: AsyncSession, id_insumo: int) -> None:
     insumo = await get_insumo(db, id_insumo)
+    count = await db.scalar(
+        select(func.count()).where(RecetaDetalleInsumo.id_insumo == id_insumo)
+    )
+    if count:
+        raise MajesaError(f"El insumo está en uso en {count} detalle(s) de receta", 409)
     await insumo_repo.delete_insumo(db, insumo)
     await db.commit()
 
@@ -85,12 +93,31 @@ async def update_subreceta(
     if not fields:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No hay campos para actualizar")
     subreceta = await insumo_repo.update_subreceta(db, subreceta, fields)
+
+    if "costo_total" in fields or "porciones" in fields:
+        from app.services.receta_service import _calcular_costo_version
+
+        res = await db.execute(
+            select(RecetaDetalleSubreceta.id_receta_version)
+            .where(RecetaDetalleSubreceta.id_subreceta == id_subreceta)
+            .distinct()
+        )
+        for (vid,) in res.all():
+            rv = await db.get(RecetaVersion, vid)
+            if rv:
+                rv.costo_total = await _calcular_costo_version(db, vid)
+
     await db.commit()
     return subreceta
 
 
 async def delete_subreceta(db: AsyncSession, id_subreceta: int) -> None:
     subreceta = await get_subreceta(db, id_subreceta)
+    count = await db.scalar(
+        select(func.count()).where(RecetaDetalleSubreceta.id_subreceta == id_subreceta)
+    )
+    if count:
+        raise MajesaError(f"La subreceta está en uso en {count} receta(s)", 409)
     await insumo_repo.delete_subreceta(db, subreceta)
     await db.commit()
 
