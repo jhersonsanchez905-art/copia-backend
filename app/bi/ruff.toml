@@ -21,6 +21,7 @@ ignore = [
     "D100",  # docstring en módulo público (opcional)
     "D104",  # docstring en paquete público (opcional)
     "S101",  # uso de assert (permitido en tests)
+    "B008",  # Depends() en argumentos — patrón válido en FastAPI
 ]
 
 [lint.pydocstyle]
