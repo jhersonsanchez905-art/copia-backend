@@ -16,7 +16,6 @@ from app.schemas.mesa_schema import (
     MesaCreate,
     MesaUpdate,
     ReservaCreate,
-    ReservaUpdate,
 )
 
 

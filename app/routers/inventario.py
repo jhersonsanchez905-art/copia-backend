@@ -3,7 +3,7 @@ inventario.py (router)
 Endpoints for inventory alerts and stock movements.
 AjusteInventario endpoints are in ajuste_inventario.py router.
 """
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
