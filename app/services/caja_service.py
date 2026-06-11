@@ -74,6 +74,15 @@ async def abrir_caja(
             409,
         )
 
+    # RN-03: block new opening if any previous-day apertura is unclosed (any user)
+    anterior = await caja_repo.get_apertura_sin_cierre_anterior(db)
+    if anterior:
+        raise MajesaError(
+            f"Existe una apertura de turno anterior sin cerrar (id={anterior.id_apertura}). "
+            "Cierra ese turno antes de abrir uno nuevo.",
+            409,
+        )
+
     # Validate denominations before writing anything
     lineas_arqueo = await _validar_arqueo(data.arqueo, db)
 
