@@ -8,16 +8,62 @@ Author: Suley Suarez
 Issue: #16
 """
 from decimal import Decimal
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, select
-from sqlalchemy.orm import selectinload
 from typing import Optional
-from app.models.caja import AperturaCaja, CierreCaja, CierreCajaDetalle
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.models.caja import (
+    AperturaCaja,
+    AperturaCajaArqueo,
+    CierreCaja,
+    CierreCajaArqueo,
+    CierreCajaDetalle,
+    Denominacion,
+)
 from app.models.venta import Pago, Venta
 
 
+# ── helpers to eager-load all nested relationships ─────────────────────────────
+
+def _apertura_options():
+    return [
+        selectinload(AperturaCaja.arqueo).selectinload(AperturaCajaArqueo.denominacion),
+    ]
+
+
+def _cierre_options():
+    return [
+        selectinload(CierreCaja.detalle),
+        selectinload(CierreCaja.arqueo_efectivo).selectinload(CierreCajaArqueo.denominacion),
+    ]
+
+
+# ── Denominacion ──────────────────────────────────────────────────────────────
+
+async def get_denominaciones_activas(db: AsyncSession) -> list[Denominacion]:
+    """Return all active denominations ordered by value descending."""
+    result = await db.execute(
+        select(Denominacion)
+        .where(Denominacion.activo.is_(True))
+        .order_by(Denominacion.valor.desc())
+    )
+    return list(result.scalars().all())
+
+
+async def get_denominacion_by_id(
+    id_denominacion: int, db: AsyncSession
+) -> Optional[Denominacion]:
+    result = await db.execute(
+        select(Denominacion).where(Denominacion.id_denominacion == id_denominacion)
+    )
+    return result.scalar_one_or_none()
+
+
+# ── AperturaCaja ──────────────────────────────────────────────────────────────
+
 async def create_apertura(apertura: AperturaCaja, db: AsyncSession) -> AperturaCaja:
-    """Persist a cash register opening to the database."""
     db.add(apertura)
     await db.flush()
     await db.refresh(apertura)
@@ -25,15 +71,17 @@ async def create_apertura(apertura: AperturaCaja, db: AsyncSession) -> AperturaC
 
 
 async def get_apertura_by_id(id_apertura: int, db: AsyncSession) -> Optional[AperturaCaja]:
-    """Retrieve a cash register opening by its ID."""
     result = await db.execute(
-        select(AperturaCaja).where(AperturaCaja.id_apertura == id_apertura)
+        select(AperturaCaja)
+        .options(*_apertura_options())
+        .where(AperturaCaja.id_apertura == id_apertura)
     )
     return result.scalar_one_or_none()
 
 
-async def get_apertura_activa(id_usuario: int, turno: str, db: AsyncSession) -> Optional[AperturaCaja]:
-    """Retrieve the active opening for a user and shift if it exists."""
+async def get_apertura_activa(
+    id_usuario: int, turno: str, db: AsyncSession
+) -> Optional[AperturaCaja]:
     result = await db.execute(
         select(AperturaCaja)
         .where(
@@ -46,10 +94,28 @@ async def get_apertura_activa(id_usuario: int, turno: str, db: AsyncSession) -> 
     return result.scalar_one_or_none()
 
 
-async def get_apertura_sin_cierre(id_usuario: int, db: AsyncSession) -> Optional[AperturaCaja]:
-    """Retrieve the most recent unclosed opening for a user."""
+async def get_apertura_sin_cierre_anterior(db: AsyncSession) -> Optional[AperturaCaja]:
+    """Return any unclosed apertura from a day prior to today, across all users (RN-03)."""
+    from datetime import date
     result = await db.execute(
         select(AperturaCaja)
+        .outerjoin(CierreCaja, CierreCaja.id_apertura == AperturaCaja.id_apertura)
+        .where(
+            CierreCaja.id_cierre.is_(None),
+            AperturaCaja.fecha < date.today(),
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_apertura_sin_cierre(
+    id_usuario: int, db: AsyncSession
+) -> Optional[AperturaCaja]:
+    """Return the most recent unclosed opening for a user, with arqueo eagerly loaded."""
+    result = await db.execute(
+        select(AperturaCaja)
+        .options(*_apertura_options())
         .outerjoin(CierreCaja, CierreCaja.id_apertura == AperturaCaja.id_apertura)
         .where(
             AperturaCaja.id_usuario == id_usuario,
@@ -60,6 +126,16 @@ async def get_apertura_sin_cierre(id_usuario: int, db: AsyncSession) -> Optional
     )
     return result.scalar_one_or_none()
 
+
+async def create_apertura_arqueo(
+    arqueo: AperturaCajaArqueo, db: AsyncSession
+) -> AperturaCajaArqueo:
+    db.add(arqueo)
+    await db.flush()
+    return arqueo
+
+
+# ── Sales aggregates ──────────────────────────────────────────────────────────
 
 async def get_total_ventas_by_apertura(id_apertura: int, db: AsyncSession) -> Decimal:
     """Sum of all completed sale totals for a given apertura."""
@@ -91,46 +167,56 @@ async def get_totales_por_metodo_pago(
     return {row[0]: Decimal(str(row[1])) for row in result.all()}
 
 
+# ── CierreCaja ────────────────────────────────────────────────────────────────
+
 async def create_cierre(cierre: CierreCaja, db: AsyncSession) -> CierreCaja:
-    """Persist a cash register closing and return it with its generated id_cierre."""
+    """Persist closing and return it with its generated id_cierre."""
     db.add(cierre)
     await db.flush()
     await db.refresh(cierre)
     return cierre
 
 
-async def create_cierre_detalle(detalle: CierreCajaDetalle, db: AsyncSession) -> CierreCajaDetalle:
-    """Persist a payment method detail for a cash register closing."""
+async def create_cierre_detalle(
+    detalle: CierreCajaDetalle, db: AsyncSession
+) -> CierreCajaDetalle:
     db.add(detalle)
     await db.flush()
     return detalle
 
 
-async def get_cierre_by_apertura(id_apertura: int, db: AsyncSession) -> Optional[CierreCaja]:
-    """Retrieve the closing associated to a given opening, with detalle eagerly loaded."""
+async def create_cierre_arqueo(
+    arqueo: CierreCajaArqueo, db: AsyncSession
+) -> CierreCajaArqueo:
+    db.add(arqueo)
+    await db.flush()
+    return arqueo
+
+
+async def get_cierre_by_apertura(
+    id_apertura: int, db: AsyncSession
+) -> Optional[CierreCaja]:
     result = await db.execute(
         select(CierreCaja)
-        .options(selectinload(CierreCaja.detalle))
+        .options(*_cierre_options())
         .where(CierreCaja.id_apertura == id_apertura)
     )
     return result.scalar_one_or_none()
 
 
 async def get_cierres(db: AsyncSession) -> list[CierreCaja]:
-    """Return all closings ordered by most recent first, with detalle eagerly loaded."""
     result = await db.execute(
         select(CierreCaja)
-        .options(selectinload(CierreCaja.detalle))
+        .options(*_cierre_options())
         .order_by(CierreCaja.hora_cierre.desc())
     )
     return list(result.scalars().all())
 
 
 async def get_cierre_by_id(id_cierre: int, db: AsyncSession) -> Optional[CierreCaja]:
-    """Retrieve a specific closing by its ID, with detalle eagerly loaded."""
     result = await db.execute(
         select(CierreCaja)
-        .options(selectinload(CierreCaja.detalle))
+        .options(*_cierre_options())
         .where(CierreCaja.id_cierre == id_cierre)
     )
     return result.scalar_one_or_none()

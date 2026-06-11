@@ -3,6 +3,7 @@ venta_service.py
 Async business logic for Venta registration with atomic inventory deduction.
 
 Flow for registrar_venta:
+0. Validate pedido state and apertura is open.
 1. Resolve active RecetaVersion for each product.
 2. Aggregate insumo quantities across all items (Insumo + Subreceta ingredients).
 3. Verify ALL stocks before touching anything.
@@ -22,9 +23,9 @@ from sqlalchemy.orm import selectinload
 
 from app.exceptions import InsumoInsuficienteError, MajesaError, VentaNoEncontradaError
 from app.models.insumo import Subreceta
-from app.models.pedido import Pedido, PedidoServicio
+from app.models.pedido import PedidoServicio
 from app.models.venta import Factura, ItemVenta, Pago, Venta
-from app.repositories import producto_repo, receta_repo, stock_repo, venta_repo
+from app.repositories import caja_repo, pedido_repo, producto_repo, receta_repo, stock_repo, venta_repo
 from app.schemas.venta_schema import VentaCreateRequest
 from app.services import inventario_service
 
@@ -81,6 +82,25 @@ async def registrar_venta(
     All DB operations committed in one transaction; any error rolls back.
     """
     try:
+        # ── Step 0: pre-flight validations ───────────────────────────────────
+
+        # Validate pedido exists and is in 'enviado' state (RF-020 / 1.3)
+        pedido = None
+        if data.id_pedido is not None:
+            pedido = await pedido_repo.get_pedido_with_mesa(db, data.id_pedido)
+            if not pedido:
+                raise MajesaError(f"Pedido {data.id_pedido} no encontrado", 404)
+            if pedido.estado != "enviado":
+                raise MajesaError(
+                    "El pedido debe estar en estado enviado para registrar venta", 422
+                )
+
+        # Block sales against a closed apertura (1.4)
+        if await caja_repo.get_cierre_by_apertura(data.id_apertura, db):
+            raise MajesaError(
+                "No se pueden registrar ventas en una apertura ya cerrada", 409
+            )
+
         # ── Step 1 & 2: resolve recipes and aggregate insumo requirements ────
         # {id_insumo: Decimal total_needed}
         requerimientos: dict[int, Decimal] = {}
@@ -201,12 +221,7 @@ async def registrar_venta(
         await venta_repo.create_factura(factura, db)
 
         # ── Step 7: update Pedido estado → pagado; Mesa → disponible ─────────
-        pedido_result = await db.execute(
-            select(Pedido)
-            .options(selectinload(Pedido.mesa))
-            .where(Pedido.id_pedido == data.id_pedido)
-        )
-        pedido = pedido_result.scalar_one_or_none()
+        # Reuse the pedido already fetched in step 0 (no extra query)
         if pedido:
             pedido.estado = "pagado"
             if pedido.mesa:
