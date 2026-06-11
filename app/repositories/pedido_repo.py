@@ -23,6 +23,20 @@ async def get_pedido_by_id(db: AsyncSession, id_pedido: int) -> Pedido | None:
     return result.scalar_one_or_none()
 
 
+async def get_pedido_with_mesa(db: AsyncSession, id_pedido: int) -> Pedido | None:
+    """Fetch a pedido with items, servicios, and mesa eagerly loaded."""
+    result = await db.execute(
+        select(Pedido)
+        .options(
+            selectinload(Pedido.items),
+            selectinload(Pedido.servicios),
+            selectinload(Pedido.mesa),
+        )
+        .where(Pedido.id_pedido == id_pedido)
+    )
+    return result.scalar_one_or_none()
+
+
 async def get_pedidos(
     db: AsyncSession,
     estado: str | None = None,
