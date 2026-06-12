@@ -92,6 +92,10 @@ async def update_pedido_item(
     await db.refresh(item)
     return item
 
+async def delete_pedido_item(db: AsyncSession, item: PedidoItem) -> None:
+    """Delete a pedido item from the database."""
+    await db.delete(item)
+    await db.flush()
 
 # ── PedidoServicio ────────────────────────────────────────────────────────────
 

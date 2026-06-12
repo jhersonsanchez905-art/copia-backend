@@ -83,3 +83,16 @@ async def cambiar_estado_item(
     current_user: Usuario = Depends(require_rol("mesero", "administrador")),
 ):
     return await pedido_service.cambiar_estado_item(db, id_pedido_item, nuevo_estado)
+
+@router.delete(
+    "/{id_pedido}/items/{id_pedido_item}",
+    response_model=PedidoResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def eliminar_item(
+    id_pedido: int,
+    id_pedido_item: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("mesero", "administrador")),
+):
+    return await pedido_service.eliminar_item(db, id_pedido, id_pedido_item)

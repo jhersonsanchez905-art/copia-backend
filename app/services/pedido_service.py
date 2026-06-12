@@ -4,6 +4,7 @@ Async business logic for Pedido, PedidoItem, and PedidoServicio.
 Mesero flow: abierto → enviado → pagado | cancelado
 """
 import datetime
+from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,6 +47,18 @@ def _validate_pedido_transition(current: str, next_state: str) -> None:
         )
 
 
+async def _recalcular_total(db: AsyncSession, pedido: Pedido) -> Pedido:
+    """Recalculate and update the total for a pedido."""
+    await db.refresh(pedido, ["items", "servicios"])
+    total = Decimal("0")
+    for item in pedido.items:
+        if item.estado != "cancelado":
+            total += item.subtotal
+    for servicio in pedido.servicios:
+        total += servicio.subtotal
+    return await pedido_repo.update_pedido(db, pedido, {"total": total})
+
+
 # ── Pedido ────────────────────────────────────────────────────────────────────
 
 async def get_pedido(db: AsyncSession, id_pedido: int) -> Pedido:
@@ -81,6 +94,7 @@ async def create_pedido(
         observaciones=data.observaciones,
         fecha_hora=_now(),
         estado="abierto",
+        total=Decimal("0"),
     )
     pedido = await pedido_repo.create_pedido(db, pedido)
 
@@ -110,9 +124,8 @@ async def create_pedido(
         )
         await pedido_repo.create_pedido_servicio(db, ps)
 
-    # Mark mesa as ocupada
     await mesa_repo.update_mesa(db, mesa, {"estado": "ocupada"})
-
+    pedido = await _recalcular_total(db, pedido)
     await db.commit()
     return await pedido_repo.get_pedido_by_id(db, pedido.id_pedido)
 
@@ -129,7 +142,7 @@ async def cambiar_estado_pedido(
 
 async def agregar_item(
     db: AsyncSession, id_pedido: int, data: PedidoItemCreate
-) -> PedidoItem:
+) -> Pedido:
     pedido = await get_pedido(db, id_pedido)
     if pedido.estado not in ("abierto",):
         raise MajesaError("Solo se pueden agregar items a pedidos abiertos", 409)
@@ -142,9 +155,28 @@ async def agregar_item(
         observaciones=data.observaciones,
         estado="pendiente",
     )
-    item = await pedido_repo.create_pedido_item(db, item)
+    await pedido_repo.create_pedido_item(db, item)
+    pedido = await _recalcular_total(db, pedido)
     await db.commit()
-    return item
+    return pedido
+
+
+async def eliminar_item(
+    db: AsyncSession, id_pedido: int, id_pedido_item: int
+) -> Pedido:
+    """Delete a pedido item and recalculate the total."""
+    pedido = await get_pedido(db, id_pedido)
+    if pedido.estado != "abierto":
+        raise MajesaError("Solo se pueden eliminar items de pedidos abiertos", 409)
+    item = await pedido_repo.get_pedido_item_by_id(db, id_pedido_item)
+    if not item:
+        raise MajesaError(f"PedidoItem {id_pedido_item} no encontrado", 404)
+    if item.id_pedido != id_pedido:
+        raise MajesaError("El item no pertenece a este pedido", 400)
+    await pedido_repo.delete_pedido_item(db, item)
+    pedido = await _recalcular_total(db, pedido)
+    await db.commit()
+    return pedido
 
 
 async def cambiar_estado_item(

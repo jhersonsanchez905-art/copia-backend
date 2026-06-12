@@ -28,6 +28,7 @@ class Pedido(Base):
     # abierto | enviado | pagado | cancelado
     estado = Column(String(20), nullable=False, default="abierto")
     observaciones = Column(String)
+    total = Column(Numeric(14, 2), nullable=False, default=0)
 
     mesa = relationship("Mesa", back_populates="pedidos")
     usuario = relationship("Usuario", back_populates="pedidos")
