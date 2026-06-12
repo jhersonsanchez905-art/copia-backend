@@ -140,8 +140,9 @@ async def registrar_venta(
             items_info.append((version, snapshot, precio_unitario, item_req.cantidad))
 
         # ── Step 3: verify all stocks before touching anything ───────────────
+        stocks_map = await stock_repo.get_stocks_by_insumos(db, list(requerimientos.keys()))
         for id_insumo, cantidad_requerida in requerimientos.items():
-            stock = await stock_repo.get_stock_by_insumo(db, id_insumo)
+            stock = stocks_map.get(id_insumo)
             if stock is None or stock.cantidad < cantidad_requerida:
                 disponible = stock.cantidad if stock else Decimal("0")
                 raise InsumoInsuficienteError(

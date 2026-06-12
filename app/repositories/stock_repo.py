@@ -10,6 +10,11 @@ from sqlalchemy.orm import selectinload
 from app.models.stock import Stock
 
 
+async def get_stocks_by_insumos(db: AsyncSession, ids: list[int]) -> dict[int, "Stock"]:
+    result = await db.execute(select(Stock).where(Stock.id_insumo.in_(ids)))
+    return {s.id_insumo: s for s in result.scalars().all()}
+
+
 async def get_stock_by_insumo(db: AsyncSession, id_insumo: int) -> Stock | None:
     result = await db.execute(
         select(Stock)
