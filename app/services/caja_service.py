@@ -86,11 +86,13 @@ async def abrir_caja(
     # Validate denominations before writing anything
     lineas_arqueo = await _validar_arqueo(data.arqueo, db)
 
+    monto_inicial = sum(subtotal for _, _, subtotal in lineas_arqueo)
+
     apertura = AperturaCaja(
         id_usuario=id_usuario,
         turno=data.turno,
         fecha=data.fecha,
-        monto_inicial=data.monto_inicial,
+        monto_inicial=monto_inicial,
         hora_apertura=datetime.now(timezone.utc),
         observaciones=data.observaciones,
     )
@@ -139,6 +141,9 @@ async def cerrar_caja(
     # Validate denominations before any writes
     lineas_arqueo = await _validar_arqueo(data.arqueo_efectivo, db)
 
+    # Compute cash total from denomination counts — cashier never enters it manually
+    total_efectivo_arqueo = sum(subtotal for _, _, subtotal in lineas_arqueo)
+
     total_transacciones = await caja_repo.get_total_ventas_by_apertura(
         apertura.id_apertura, db
     )
@@ -146,9 +151,24 @@ async def cerrar_caja(
         apertura.id_apertura, db
     )
 
-    total_contado = sum(
-        (d.total_contado for d in data.detalle),
-        Decimal(0),
+    # Identify the cash payment method (requiere_comprobante = False)
+    metodo_efectivo = await caja_repo.get_metodo_pago_efectivo(db)
+    if not metodo_efectivo:
+        raise MajesaError(
+            "No se encontró un método de pago de efectivo configurado en el sistema", 422
+        )
+
+    # Guard: detalle must NOT include the cash method (it's auto-computed from arqueo)
+    ids_detalle = {d.id_metodo_pago for d in data.detalle}
+    if metodo_efectivo.id_metodo_pago in ids_detalle:
+        raise MajesaError(
+            f"El método de pago '{metodo_efectivo.nombre}' no debe incluirse en detalle — "
+            "su total se calcula automáticamente del arqueo de denominaciones.",
+            422,
+        )
+
+    total_contado = total_efectivo_arqueo + sum(
+        (d.total_contado for d in data.detalle), Decimal(0)
     )
     diferencia_general = total_contado - total_transacciones
 
@@ -165,6 +185,22 @@ async def cerrar_caja(
     )
     cierre = await caja_repo.create_cierre(cierre, db)
 
+    # Auto-create the cash detalle row from arqueo sum
+    total_esperado_efectivo = totales_por_metodo.get(
+        metodo_efectivo.id_metodo_pago, Decimal(0)
+    )
+    await caja_repo.create_cierre_detalle(
+        CierreCajaDetalle(
+            id_cierre=cierre.id_cierre,
+            id_metodo_pago=metodo_efectivo.id_metodo_pago,
+            total_esperado=total_esperado_efectivo,
+            total_contado=total_efectivo_arqueo,
+            diferencia=total_efectivo_arqueo - total_esperado_efectivo,
+        ),
+        db,
+    )
+
+    # Create detalle rows for non-cash payment methods
     for d in data.detalle:
         total_esperado = totales_por_metodo.get(d.id_metodo_pago, Decimal(0))
         await caja_repo.create_cierre_detalle(
