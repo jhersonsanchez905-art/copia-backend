@@ -24,7 +24,7 @@ class Venta(Base):
     id_venta = Column(Integer, primary_key=True, index=True)
 
     id_apertura = Column(Integer, ForeignKey("pos.apertura_caja.id_apertura"), nullable=False)
-    id_pedido = Column(Integer, ForeignKey("pos.pedido.id_pedido"), nullable=False, unique=True)
+    id_pedido = Column(Integer, ForeignKey("pos.pedido.id_pedido"), nullable=True, unique=True)
     id_usuario = Column(Integer, ForeignKey("pos.usuario.id_usuario"), nullable=False)
     id_cliente = Column(Integer, ForeignKey("pos.cliente.id_cliente"), nullable=True)
 
