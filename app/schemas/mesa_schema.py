@@ -1,13 +1,16 @@
 """
 mesa_schema.py
-Pydantic schemas for Mesa and Reserva.
-State machines:
-  Mesa: disponible → ocupada | reservada → disponible
-  Reserva: pendiente → confirmada | cancelada; confirmada → completada | cancelada
+Pydantic schemas for Mesa.
+State machine: disponible → ocupada | reservada → disponible
+
+Reserva schemas have been moved to reserva_schema.py (single source of truth).
+
+Author: Suley Suarez / SebastianValero12
+Issue: fix/reservas-transferencias
 """
-from datetime import datetime
 from enum import Enum
 from typing import Optional
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -15,13 +18,6 @@ class EstadoMesaEnum(str, Enum):
     disponible = "disponible"
     ocupada = "ocupada"
     reservada = "reservada"
-
-
-class EstadoReservaEnum(str, Enum):
-    pendiente = "pendiente"
-    confirmada = "confirmada"
-    cancelada = "cancelada"
-    completada = "completada"
 
 
 # ── Mesa ──────────────────────────────────────────────────────────────────────
@@ -49,34 +45,3 @@ class MesaResponse(MesaBase):
 
     id_mesa: int
     estado: EstadoMesaEnum
-
-
-# ── Reserva ───────────────────────────────────────────────────────────────────
-
-class ReservaBase(BaseModel):
-    id_mesa: int
-    id_cliente: Optional[int] = None
-    fecha_hora: datetime
-    num_personas: int = Field(..., ge=1)
-    observaciones: Optional[str] = None
-
-
-class ReservaCreate(ReservaBase):
-    pass
-
-
-class ReservaUpdate(BaseModel):
-    id_mesa: Optional[int] = None
-    id_cliente: Optional[int] = None
-    fecha_hora: Optional[datetime] = None
-    num_personas: Optional[int] = Field(None, ge=1)
-    observaciones: Optional[str] = None
-
-
-class ReservaResponse(ReservaBase):
-    model_config = ConfigDict(from_attributes=True)
-
-    id_reserva: int
-    id_usuario: int
-    estado: EstadoReservaEnum
-    fecha_creacion: datetime

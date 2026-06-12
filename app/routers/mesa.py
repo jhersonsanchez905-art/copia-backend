@@ -1,6 +1,12 @@
 """
 mesa.py (router)
-Endpoints for Mesa and Reserva management with state machine enforcement.
+Endpoints for Mesa management with state machine enforcement.
+
+Reserva mutation endpoints have been removed — use /api/v1/reservas instead.
+Only GET /mesas/{id_mesa}/reservas is kept as a convenience query.
+
+Author: Suley Suarez / SebastianValero12
+Issue: fix/reservas-transferencias
 """
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,12 +19,11 @@ from app.schemas.mesa_schema import (
     MesaCreate,
     MesaUpdate,
     MesaResponse,
-    ReservaCreate,
-    ReservaResponse,
 )
-from app.services import mesa_service
+from app.schemas.reserva_schema import ReservaResponse
+from app.services import mesa_service, reserva_service
 
-router = APIRouter(prefix="/mesas", tags=["Mesas y Reservas"])
+router = APIRouter(prefix="/mesas", tags=["Mesas"])
 
 
 # ── Mesa ──────────────────────────────────────────────────────────────────────
@@ -71,7 +76,7 @@ async def cambiar_estado_mesa(
     return await mesa_service.cambiar_estado_mesa(db, id_mesa, nuevo_estado)
 
 
-# ── Reserva ───────────────────────────────────────────────────────────────────
+# ── Reservas por mesa (solo lectura) ─────────────────────────────────────────
 
 @router.get("/{id_mesa}/reservas", response_model=list[ReservaResponse])
 async def listar_reservas_de_mesa(
@@ -80,36 +85,5 @@ async def listar_reservas_de_mesa(
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    return await mesa_service.get_reservas(db, id_mesa=id_mesa, estado=estado)
-
-
-@router.get("/reservas/all", response_model=list[ReservaResponse])
-async def listar_reservas(
-    estado: str | None = Query(None),
-    db: AsyncSession = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
-):
-    return await mesa_service.get_reservas(db, estado=estado)
-
-
-@router.post(
-    "/reservas",
-    response_model=ReservaResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-async def crear_reserva(
-    data: ReservaCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: Usuario = Depends(require_rol("cajero", "mesero", "administrador")),
-):
-    return await mesa_service.create_reserva(db, data, current_user.id_usuario)
-
-
-@router.patch("/reservas/{id_reserva}/estado", response_model=ReservaResponse)
-async def cambiar_estado_reserva(
-    id_reserva: int,
-    nuevo_estado: str = Query(..., description="confirmada | cancelada | completada"),
-    db: AsyncSession = Depends(get_db),
-    current_user: Usuario = Depends(require_rol("administrador")),
-):
-    return await mesa_service.cambiar_estado_reserva(db, id_reserva, nuevo_estado)
+    """Convenience endpoint — delegates to reserva_service."""
+    return await reserva_service.get_reservas(db, id_mesa=id_mesa, estado=estado)

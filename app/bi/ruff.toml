@@ -30,6 +30,9 @@ convention = "google"
 [lint.mccabe]
 max-complexity = 10
 
+[lint.isort]
+known-first-party = ["app"]
+
 [format]
 quote-style = "double"
 indent-style = "space"
