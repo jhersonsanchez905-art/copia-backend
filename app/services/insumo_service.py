@@ -5,13 +5,12 @@ Async business logic for Insumo, Subreceta, and SubrecetaIngrediente.
 from decimal import Decimal
 
 from fastapi import HTTPException, status
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.exceptions import MajesaError
 from app.models.insumo import Insumo, Subreceta, SubrecetaIngrediente
-from app.models.receta import RecetaDetalleInsumo, RecetaDetalleSubreceta
+from app.models.receta import RecetaDetalleSubreceta
 from app.repositories import insumo_repo
 from app.schemas.insumo_schema import (
     InsumoCreate,
@@ -57,12 +56,7 @@ async def update_insumo(db: AsyncSession, id_insumo: int, data: InsumoUpdate) ->
 
 async def delete_insumo(db: AsyncSession, id_insumo: int) -> None:
     insumo = await get_insumo(db, id_insumo)
-    count = await db.scalar(
-        select(func.count()).where(RecetaDetalleInsumo.id_insumo == id_insumo)
-    )
-    if count:
-        raise MajesaError(f"El insumo está en uso en {count} detalle(s) de receta", 409)
-    await insumo_repo.delete_insumo(db, insumo)
+    await insumo_repo.update_insumo(db, insumo, {"activo": False})
     await db.commit()
 
 
@@ -165,12 +159,7 @@ async def update_subreceta(
 
 async def delete_subreceta(db: AsyncSession, id_subreceta: int) -> None:
     subreceta = await get_subreceta(db, id_subreceta)
-    count = await db.scalar(
-        select(func.count()).where(RecetaDetalleSubreceta.id_subreceta == id_subreceta)
-    )
-    if count:
-        raise MajesaError(f"La subreceta está en uso en {count} receta(s)", 409)
-    await insumo_repo.delete_subreceta(db, subreceta)
+    await insumo_repo.update_subreceta(db, subreceta, {"activo": False})
     await db.commit()
 
 
