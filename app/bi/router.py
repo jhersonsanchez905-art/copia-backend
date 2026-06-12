@@ -202,7 +202,7 @@ async def warnings_insumo(
     dependencies=[Depends(_verify_cron_secret)],
 )
 async def procesar_dia(
-    body: ProcesarDiaRequest = Depends(),
+    body: ProcesarDiaRequest,
     db: AsyncSession = Depends(get_db),
 ) -> ProcesarDiaResponse:
     """Run the full BI ETL pipeline for the specified date.

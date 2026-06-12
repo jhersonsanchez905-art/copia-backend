@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 BOGOTA_TZ = ZoneInfo("America/Bogota")
 
 
-def _ventana_utc(fecha_local: date) -> tuple[str, str]:
+def _ventana_utc(fecha_local: date) -> tuple:
     """Convert a local Colombia date to UTC window boundaries.
 
     Args:
@@ -54,7 +54,7 @@ def _ventana_utc(fecha_local: date) -> tuple[str, str]:
         tzinfo=BOGOTA_TZ,
     ).astimezone(timezone.utc)
     fin = inicio + timedelta(days=1)
-    return inicio.isoformat(), fin.isoformat()
+    return inicio, fin
 
 
 async def _paso1_kpi_producto_dia(
@@ -83,9 +83,9 @@ async def _paso1_kpi_producto_dia(
                 i.id_insumo,
                 CASE
                     WHEN i.pct_rendimiento > 0
-                    THEN (i.precio / NULLIF(i.contador_unidades, 0))
+                    THEN (i.precio / COALESCE(NULLIF(i.contador_unidades, 0), 1))
                          * 100.0 / i.pct_rendimiento
-                    ELSE i.precio / NULLIF(i.contador_unidades, 0)
+                    ELSE i.precio / COALESCE(NULLIF(i.contador_unidades, 0), 1)
                 END AS costo_udm_real
             FROM pos.insumo i
         ),
@@ -515,8 +515,11 @@ async def _paso5_rebuild_resumenes(db: AsyncSession) -> None:
         JOIN pos.insumo i                    ON i.id_insumo   = c.id_insumo;
         """,
     ]
-    for query in queries:
-        await db.execute(text(query))
+    for query_block in queries:
+        for statement in query_block.split(";"):
+            clean = statement.strip()
+            if clean:
+                await db.execute(text(clean))
 
 
 async def _paso6_notify_vercel() -> None:
