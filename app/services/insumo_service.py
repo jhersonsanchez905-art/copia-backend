@@ -10,7 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.insumo import Insumo, Subreceta, SubrecetaIngrediente
-from app.models.receta import RecetaDetalleSubreceta
+from app.exceptions import MajesaError
+from app.models.receta import RecetaDetalleInsumo, RecetaDetalleSubreceta, RecetaVersion
 from app.repositories import insumo_repo
 from app.schemas.insumo_schema import (
     InsumoCreate,
@@ -56,6 +57,31 @@ async def update_insumo(db: AsyncSession, id_insumo: int, data: InsumoUpdate) ->
 
 async def delete_insumo(db: AsyncSession, id_insumo: int) -> None:
     insumo = await get_insumo(db, id_insumo)
+
+    # Guard: insumo referenced in a vigente RecetaVersion
+    en_receta = await db.execute(
+        select(RecetaDetalleInsumo)
+        .join(RecetaVersion, RecetaDetalleInsumo.id_receta_version == RecetaVersion.id_receta_version)
+        .where(RecetaDetalleInsumo.id_insumo == id_insumo, RecetaVersion.vigente.is_(True))
+        .limit(1)
+    )
+    if en_receta.scalar_one_or_none():
+        raise MajesaError(
+            f"No se puede desactivar el insumo '{insumo.nombre}': está en uso en una receta vigente", 409
+        )
+
+    # Guard: insumo referenced in an active Subreceta
+    en_subreceta = await db.execute(
+        select(SubrecetaIngrediente)
+        .join(Subreceta, SubrecetaIngrediente.id_subreceta == Subreceta.id_subreceta)
+        .where(SubrecetaIngrediente.id_insumo == id_insumo, Subreceta.activo.is_(True))
+        .limit(1)
+    )
+    if en_subreceta.scalar_one_or_none():
+        raise MajesaError(
+            f"No se puede desactivar el insumo '{insumo.nombre}': está en uso en una subreceta activa", 409
+        )
+
     await insumo_repo.update_insumo(db, insumo, {"activo": False})
     await db.commit()
 
@@ -159,6 +185,19 @@ async def update_subreceta(
 
 async def delete_subreceta(db: AsyncSession, id_subreceta: int) -> None:
     subreceta = await get_subreceta(db, id_subreceta)
+
+    # Guard: subreceta referenced in a vigente RecetaVersion
+    en_receta = await db.execute(
+        select(RecetaDetalleSubreceta)
+        .join(RecetaVersion, RecetaDetalleSubreceta.id_receta_version == RecetaVersion.id_receta_version)
+        .where(RecetaDetalleSubreceta.id_subreceta == id_subreceta, RecetaVersion.vigente.is_(True))
+        .limit(1)
+    )
+    if en_receta.scalar_one_or_none():
+        raise MajesaError(
+            f"No se puede desactivar la subreceta '{subreceta.nombre}': está en uso en una receta vigente", 409
+        )
+
     await insumo_repo.update_subreceta(db, subreceta, {"activo": False})
     await db.commit()
 

@@ -78,6 +78,8 @@ async def actualizar_usuario(id_usuario: int, data: UsuarioUpdate, db: AsyncSess
 
 @router.delete("/usuarios/{id_usuario}", status_code=204)
 async def eliminar_usuario(id_usuario: int, db: AsyncSession = Depends(get_db), current_user: Usuario = Depends(require_rol("administrador"))):
+    if id_usuario == current_user.id_usuario:
+        raise HTTPException(status_code=400, detail="No puedes desactivar tu propia cuenta")
     if not await UsuarioService(db).eliminar(id_usuario):
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 

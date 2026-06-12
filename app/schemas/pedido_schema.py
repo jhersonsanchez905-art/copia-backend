@@ -35,8 +35,11 @@ class PedidoItemBase(BaseModel):
     observaciones: Optional[str] = None
 
 
-class PedidoItemCreate(PedidoItemBase):
-    pass
+class PedidoItemCreate(BaseModel):
+    """Create payload — precio_unitario is fetched server-side from Producto.precio."""
+    id_producto: int
+    cantidad: int = Field(..., ge=1)
+    observaciones: Optional[str] = None
 
 
 class PedidoItemUpdate(BaseModel):
