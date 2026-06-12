@@ -69,3 +69,20 @@ async def create_factura(factura: Factura, db: AsyncSession) -> Factura:
     db.add(factura)
     await db.flush()
     return factura
+
+
+async def get_pago_by_id(id_pago: int, db: AsyncSession) -> Optional[Pago]:
+    result = await db.execute(
+        select(Pago)
+        .options(selectinload(Pago.metodo_pago))
+        .where(Pago.id_pago == id_pago)
+    )
+    return result.scalar_one_or_none()
+
+
+async def update_pago(pago: Pago, data: dict, db: AsyncSession) -> Pago:
+    for key, value in data.items():
+        setattr(pago, key, value)
+    await db.flush()
+    await db.refresh(pago)
+    return pago

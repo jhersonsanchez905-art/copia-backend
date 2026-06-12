@@ -66,5 +66,4 @@ async def update(
 
 
 async def delete(db: AsyncSession, producto: Producto) -> None:
-    await db.delete(producto)
-    await db.flush()
+    await update(db, producto, {"activo": False})
