@@ -100,5 +100,6 @@ class PedidoResponse(PedidoBase):
     id_usuario: int
     fecha_hora: datetime
     estado: EstadoPedidoEnum
+    total: Decimal = Decimal("0")
     items: list[PedidoItemResponse] = []
     servicios: list[PedidoServicioResponse] = []
