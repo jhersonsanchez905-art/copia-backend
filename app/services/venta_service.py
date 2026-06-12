@@ -3,6 +3,7 @@ venta_service.py
 Async business logic for Venta registration with atomic inventory deduction.
 
 Flow for registrar_venta:
+0. Validate pedido state and apertura is open.
 1. Resolve active RecetaVersion for each product.
 2. Aggregate insumo quantities across all items (Insumo + Subreceta ingredients).
 3. Verify ALL stocks before touching anything.
@@ -22,9 +23,9 @@ from sqlalchemy.orm import selectinload
 
 from app.exceptions import InsumoInsuficienteError, MajesaError, VentaNoEncontradaError
 from app.models.insumo import Subreceta
-from app.models.pedido import Pedido
+from app.models.pedido import PedidoServicio
 from app.models.venta import Factura, ItemVenta, Pago, Venta
-from app.repositories import producto_repo, receta_repo, stock_repo, venta_repo
+from app.repositories import caja_repo, pedido_repo, producto_repo, receta_repo, stock_repo, venta_repo
 from app.schemas.venta_schema import VentaCreateRequest
 from app.services import inventario_service
 
@@ -81,6 +82,25 @@ async def registrar_venta(
     All DB operations committed in one transaction; any error rolls back.
     """
     try:
+        # ── Step 0: pre-flight validations ───────────────────────────────────
+
+        # Validate pedido exists and is in 'enviado' state (RF-020 / 1.3)
+        pedido = None
+        if data.id_pedido is not None:
+            pedido = await pedido_repo.get_pedido_with_mesa(db, data.id_pedido)
+            if not pedido:
+                raise MajesaError(f"Pedido {data.id_pedido} no encontrado", 404)
+            if pedido.estado != "enviado":
+                raise MajesaError(
+                    "El pedido debe estar en estado enviado para registrar venta", 422
+                )
+
+        # Block sales against a closed apertura (1.4)
+        if await caja_repo.get_cierre_by_apertura(data.id_apertura, db):
+            raise MajesaError(
+                "No se pueden registrar ventas en una apertura ya cerrada", 409
+            )
+
         # ── Step 1 & 2: resolve recipes and aggregate insumo requirements ────
         # {id_insumo: Decimal total_needed}
         requerimientos: dict[int, Decimal] = {}
@@ -120,8 +140,9 @@ async def registrar_venta(
             items_info.append((version, snapshot, precio_unitario, item_req.cantidad))
 
         # ── Step 3: verify all stocks before touching anything ───────────────
+        stocks_map = await stock_repo.get_stocks_by_insumos(db, list(requerimientos.keys()))
         for id_insumo, cantidad_requerida in requerimientos.items():
-            stock = await stock_repo.get_stock_by_insumo(db, id_insumo)
+            stock = stocks_map.get(id_insumo)
             if stock is None or stock.cantidad < cantidad_requerida:
                 disponible = stock.cantidad if stock else Decimal("0")
                 raise InsumoInsuficienteError(
@@ -131,7 +152,18 @@ async def registrar_venta(
 
         # ── Step 4: create Venta ─────────────────────────────────────────────
         subtotal = sum(precio * qty for _, _, precio, qty in items_info)
+
+        if data.id_pedido is not None:
+            servicios_result = await db.execute(
+                select(PedidoServicio).where(PedidoServicio.id_pedido == data.id_pedido)
+            )
+            subtotal += sum(s.subtotal for s in servicios_result.scalars().all())
+
         total_pagado = sum(p.monto for p in data.pagos)
+        if total_pagado < subtotal:
+            raise MajesaError(
+                f"Pago insuficiente: total={subtotal}, pagado={total_pagado}", 422
+            )
 
         venta = Venta(
             id_apertura=data.id_apertura,
@@ -190,12 +222,7 @@ async def registrar_venta(
         await venta_repo.create_factura(factura, db)
 
         # ── Step 7: update Pedido estado → pagado; Mesa → disponible ─────────
-        pedido_result = await db.execute(
-            select(Pedido)
-            .options(selectinload(Pedido.mesa))
-            .where(Pedido.id_pedido == data.id_pedido)
-        )
-        pedido = pedido_result.scalar_one_or_none()
+        # Reuse the pedido already fetched in step 0 (no extra query)
         if pedido:
             pedido.estado = "pagado"
             if pedido.mesa:
@@ -223,3 +250,41 @@ async def get_ventas_by_fecha_turno(
     db: AsyncSession,
 ) -> list[Venta]:
     return await venta_repo.get_ventas_by_fecha_turno(fecha, turno, db)
+
+
+async def validar_pago(
+    id_pago: int,
+    data,
+    db: AsyncSession,
+) -> Pago:
+    # 1. Payment must exist
+    pago = await venta_repo.get_pago_by_id(id_pago, db)
+    if not pago:
+        raise MajesaError(f"Pago {id_pago} no encontrado", 404)
+
+    # 2. Must be pending
+    if pago.estado_validacion != "pendiente":
+        raise MajesaError("El pago ya fue validado", 409)
+
+    # 3. Payment method must require comprobante
+    if not pago.metodo_pago.requiere_comprobante:
+        raise MajesaError("Este método de pago no requiere validación", 422)
+
+    # 4. New estado cannot be 'pendiente'
+    if data.estado_validacion.value == "pendiente":
+        raise MajesaError(
+            "El estado de validación debe ser aprobado o rechazado", 422
+        )
+
+    # All validations passed — update
+    pago = await venta_repo.update_pago(
+        pago,
+        {
+            "estado_validacion": data.estado_validacion.value,
+            "id_usuario_validacion": data.id_usuario_validacion,
+            "fecha_validacion": _now(),
+        },
+        db,
+    )
+    await db.commit()
+    return pago

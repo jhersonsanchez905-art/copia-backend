@@ -57,6 +57,8 @@ class InsumoResponse(InsumoBase):
     id_insumo: int
     fecha_creacion: datetime
     fecha_actualizacion: datetime
+    precio_real: Optional[Decimal] = None
+    precio_por_udm: Optional[Decimal] = None
 
 
 # ── Subreceta ─────────────────────────────────────────────────────────────────

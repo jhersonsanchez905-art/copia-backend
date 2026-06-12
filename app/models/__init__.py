@@ -2,6 +2,7 @@
 __init__.py
 Exporta todos los modelos del paquete app.models.
 """
+# ruff: noqa: F401
 # catálogos base — sin dependencias externas
 from app.models.catalogo import (
     Rol,
@@ -55,8 +56,11 @@ from app.models.pedido import Pedido, PedidoItem, PedidoServicio
  
 # caja — depende de usuario
 from app.models.caja import (
+    Denominacion,
     AperturaCaja,
+    AperturaCajaArqueo,
     CierreCaja,
+    CierreCajaArqueo,
     CierreCajaDetalle,
 )
  

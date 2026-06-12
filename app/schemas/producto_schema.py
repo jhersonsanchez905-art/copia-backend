@@ -43,3 +43,4 @@ class ProductoResponse(ProductoBase):
 
     id_producto: int
     fecha_modificacion: datetime | None = None
+    costo_produccion: Decimal | None = None

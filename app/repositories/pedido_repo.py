@@ -1,9 +1,6 @@
 """
 pedido_repo.py
 Async repository for Pedido, PedidoItem, and PedidoServicio.
-
-Author: Jherson / SebasValero12
-Issue: #40
 """
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +17,20 @@ async def get_pedido_by_id(db: AsyncSession, id_pedido: int) -> Pedido | None:
         .options(
             selectinload(Pedido.items),
             selectinload(Pedido.servicios),
+        )
+        .where(Pedido.id_pedido == id_pedido)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_pedido_with_mesa(db: AsyncSession, id_pedido: int) -> Pedido | None:
+    """Fetch a pedido with items, servicios, and mesa eagerly loaded."""
+    result = await db.execute(
+        select(Pedido)
+        .options(
+            selectinload(Pedido.items),
+            selectinload(Pedido.servicios),
+            selectinload(Pedido.mesa),
         )
         .where(Pedido.id_pedido == id_pedido)
     )
@@ -81,11 +92,10 @@ async def update_pedido_item(
     await db.refresh(item)
     return item
 
-
 async def delete_pedido_item(db: AsyncSession, item: PedidoItem) -> None:
+    """Delete a pedido item from the database."""
     await db.delete(item)
     await db.flush()
-
 
 # ── PedidoServicio ────────────────────────────────────────────────────────────
 
@@ -102,10 +112,3 @@ async def create_pedido_servicio(
     await db.flush()
     await db.refresh(servicio)
     return servicio
-
-
-async def delete_pedido_servicio(
-    db: AsyncSession, servicio: PedidoServicio
-) -> None:
-    await db.delete(servicio)
-    await db.flush()

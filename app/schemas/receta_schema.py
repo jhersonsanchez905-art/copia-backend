@@ -124,9 +124,11 @@ class RecetaVersionResponse(RecetaVersionBase):
 
     id_receta_version: int
     id_producto: int
+    nombre_producto: Optional[str] = None
     version: int
     vigente: bool
     fecha_creacion: Optional[datetime] = None
+    fecha_modificacion: Optional[datetime] = None
     detalles_insumo: list[RecetaDetalleInsumoResponse] = []
     detalles_subreceta: list[RecetaDetalleSubrecetaResponse] = []
     pasos: list[RecetaPasoResponse] = []

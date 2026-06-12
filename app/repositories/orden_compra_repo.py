@@ -1,96 +1,93 @@
 """
 orden_compra_repo.py
-Repositorio async para OrdenCompra y OrdenCompraDetalle.
-Usa AsyncSession + select() (SQLAlchemy 2.x). Sin session.query().
+Repositorio de acceso a datos para órdenes de compra y sus líneas de detalle.
 Autor: Ivan Ospino
-Issue: #21
+Issue: #20
 """
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
+from sqlalchemy.orm import Session
 from app.models.orden_compra import OrdenCompra, OrdenCompraDetalle
-from app.schemas.orden_compra_schema import OrdenCompraCreate
+from app.schemas.orden_compra_schema import OrdenCompraCreate, OrdenCompraUpdate, OrdenCompraDetalleCreate, OrdenCompraDetalleUpdate
 
 
 # ── OrdenCompra ───────────────────────────────────────────────────────────────
 
-async def get_orden_compra_by_id(
-    db: AsyncSession, id_orden_compra: int
-) -> OrdenCompra | None:
-    result = await db.execute(
-        select(OrdenCompra)
-        .options(selectinload(OrdenCompra.detalles))
-        .where(OrdenCompra.id_orden_compra == id_orden_compra)
-    )
-    return result.scalar_one_or_none()
+def get_orden_compra(db: Session, id_orden_compra: int):
+    return db.query(OrdenCompra).filter(OrdenCompra.id_orden_compra == id_orden_compra).first()
 
 
-async def get_ordenes_compra(
-    db: AsyncSession,
-    estado: str | None = None,
-    skip: int = 0,
-    limit: int = 100,
-) -> list[OrdenCompra]:
-    query = select(OrdenCompra).options(selectinload(OrdenCompra.detalles))
-    if estado:
-        query = query.where(OrdenCompra.estado == estado)
-    query = query.order_by(OrdenCompra.fecha_creacion.desc()).offset(skip).limit(limit)
-    result = await db.execute(query)
-    return list(result.scalars().all())
+def get_ordenes_compra(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(OrdenCompra).offset(skip).limit(limit).all()
 
 
-async def create_orden_compra(
-    db: AsyncSession, data: OrdenCompraCreate
-) -> OrdenCompra:
+def create_orden_compra(db: Session, data: OrdenCompraCreate):
     detalles_data = data.detalles or []
     orden_data = data.model_dump(exclude={"detalles"})
     orden = OrdenCompra(**orden_data)
     db.add(orden)
-    await db.flush()
-
-    for d in detalles_data:
-        detalle = OrdenCompraDetalle(
-            id_orden_compra=orden.id_orden_compra,
-            **d.model_dump(),
-        )
-        db.add(detalle)
-
-    await db.flush()
-    await db.refresh(orden)
+    db.flush()
+    for detalle in detalles_data:
+        db.add(OrdenCompraDetalle(id_orden_compra=orden.id_orden_compra, **detalle.model_dump()))
+    db.commit()
+    db.refresh(orden)
     return orden
 
 
-async def update_orden_compra(
-    db: AsyncSession, orden: OrdenCompra, data: dict
-) -> OrdenCompra:
-    for key, value in data.items():
-        setattr(orden, key, value)
-    await db.flush()
-    await db.refresh(orden)
+def update_orden_compra(db: Session, id_orden_compra: int, data: OrdenCompraUpdate):
+    orden = get_orden_compra(db, id_orden_compra)
+    if not orden:
+        return None
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(orden, field, value)
+    db.commit()
+    db.refresh(orden)
+    return orden
+
+
+def delete_orden_compra(db: Session, id_orden_compra: int):
+    orden = get_orden_compra(db, id_orden_compra)
+    if not orden:
+        return None
+    db.delete(orden)
+    db.commit()
     return orden
 
 
 # ── OrdenCompraDetalle ────────────────────────────────────────────────────────
 
-async def get_detalle_by_insumo(
-    db: AsyncSession, id_orden_compra: int, id_insumo: int
-) -> OrdenCompraDetalle | None:
-    result = await db.execute(
-        select(OrdenCompraDetalle).where(
-            OrdenCompraDetalle.id_orden_compra == id_orden_compra,
-            OrdenCompraDetalle.id_insumo == id_insumo,
-        )
-    )
-    return result.scalar_one_or_none()
+def get_detalle(db: Session, id_detalle: int):
+    return db.query(OrdenCompraDetalle).filter(OrdenCompraDetalle.id_detalle == id_detalle).first()
 
 
-async def update_detalle(
-    db: AsyncSession, detalle: OrdenCompraDetalle, data: dict
-) -> OrdenCompraDetalle:
-    for key, value in data.items():
-        setattr(detalle, key, value)
-    await db.flush()
-    await db.refresh(detalle)
+def get_detalles_by_orden(db: Session, id_orden_compra: int):
+    return db.query(OrdenCompraDetalle).filter(
+        OrdenCompraDetalle.id_orden_compra == id_orden_compra
+    ).all()
+
+
+def create_detalle(db: Session, id_orden_compra: int, data: OrdenCompraDetalleCreate):
+    detalle = OrdenCompraDetalle(id_orden_compra=id_orden_compra, **data.model_dump())
+    db.add(detalle)
+    db.commit()
+    db.refresh(detalle)
+    return detalle
+
+
+def update_detalle(db: Session, id_detalle: int, data: OrdenCompraDetalleUpdate):
+    detalle = get_detalle(db, id_detalle)
+    if not detalle:
+        return None
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(detalle, field, value)
+    db.commit()
+    db.refresh(detalle)
+    return detalle
+
+
+def delete_detalle(db: Session, id_detalle: int):
+    detalle = get_detalle(db, id_detalle)
+    if not detalle:
+        return None
+    db.delete(detalle)
+    db.commit()
     return detalle

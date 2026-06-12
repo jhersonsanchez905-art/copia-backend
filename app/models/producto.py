@@ -26,7 +26,15 @@ class Producto(Base):
     fecha_lanzamiento = Column(Date, nullable=True)
     fecha_modificacion = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
+    @property
+    def costo_produccion(self):
+        for r in self.recetas:
+            if r.vigente:
+                return r.costo_total
+        return None
+
     categoria = relationship("Categoria", back_populates="productos")
     recetas = relationship("RecetaVersion", back_populates="producto")
     pedido_items = relationship("PedidoItem", back_populates="producto")
     item_ventas = relationship("ItemVenta", back_populates="producto")
+ 

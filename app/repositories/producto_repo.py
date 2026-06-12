@@ -7,6 +7,7 @@ Issue: #40
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.producto import Producto
 
@@ -19,7 +20,7 @@ async def get_all(
     skip: int = 0,
     limit: int = 50,
 ) -> list[Producto]:
-    query = select(Producto)
+    query = select(Producto).options(selectinload(Producto.recetas))
     if solo_activos:
         query = query.where(Producto.activo.is_(True))
     if id_categoria is not None:
@@ -45,7 +46,12 @@ async def count(
 
 
 async def get_by_id(db: AsyncSession, producto_id: int) -> Producto | None:
-    return await db.get(Producto, producto_id)
+    result = await db.execute(
+        select(Producto)
+        .options(selectinload(Producto.recetas))
+        .where(Producto.id_producto == producto_id)
+    )
+    return result.scalar_one_or_none()
 
 
 async def create(db: AsyncSession, producto: Producto) -> Producto:
@@ -66,5 +72,4 @@ async def update(
 
 
 async def delete(db: AsyncSession, producto: Producto) -> None:
-    await db.delete(producto)
-    await db.flush()
+    await update(db, producto, {"activo": False})

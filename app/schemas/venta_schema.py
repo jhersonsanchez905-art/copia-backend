@@ -65,6 +65,17 @@ class PagoResponse(BaseModel):
     estado_validacion: EstadoValidacionEnum
 
 
+class ValidarPagoRequest(BaseModel):
+    estado_validacion: EstadoValidacionEnum
+    id_usuario_validacion: int
+
+
+class PagoDetalleResponse(PagoResponse):
+    """Respuesta extendida con campos de validación."""
+    fecha_validacion: Optional[datetime] = None
+    id_usuario_validacion: Optional[int] = None
+
+
 # ── Factura ───────────────────────────────────────────────────────────────────
 
 class FacturaResponse(BaseModel):
@@ -103,7 +114,7 @@ class DevolucionResponse(BaseModel):
 class VentaCreateRequest(BaseModel):
     turno: TurnoEnum
     id_apertura: int
-    id_pedido: int
+    id_pedido: Optional[int] = None
     id_cliente: Optional[int] = None
     productos: list[ItemVentaRequest]
     pagos: list[PagoRequest]
@@ -114,7 +125,7 @@ class VentaResponse(BaseModel):
 
     id_venta: int
     id_apertura: int
-    id_pedido: int
+    id_pedido: Optional[int] = None
     id_usuario: int
     id_cliente: Optional[int] = None
     turno: str

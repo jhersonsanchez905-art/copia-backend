@@ -38,6 +38,20 @@ async def get_ajustes(
     return list(result.scalars().all())
 
 
+async def get_ajuste_pendiente_by_insumo(
+    db: AsyncSession, id_insumo: int
+) -> AjusteInventario | None:
+    result = await db.execute(
+        select(AjusteInventario)
+        .where(
+            AjusteInventario.id_insumo == id_insumo,
+            AjusteInventario.estado == "pendiente",
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 async def update_ajuste(
     db: AsyncSession, ajuste: AjusteInventario, data: dict
 ) -> AjusteInventario:

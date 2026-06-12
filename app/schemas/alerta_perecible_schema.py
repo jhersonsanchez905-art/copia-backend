@@ -25,3 +25,11 @@ class AlertaPerecibleResponse(BaseModel):
     accion_sugerida: Optional[str] = None
     fecha_creacion: datetime
     fecha_resolucion: Optional[datetime] = None
+
+
+class EvaluacionPereciblesResponse(BaseModel):
+    """Response schema for the manual perishables evaluation endpoint."""
+
+    alertas_creadas: int
+    omitidas: int
+    detalle: list[AlertaPerecibleResponse] = []

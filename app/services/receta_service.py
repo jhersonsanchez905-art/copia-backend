@@ -6,8 +6,12 @@ RecetaDetalleSubreceta, and RecetaPaso.
 Rule: new recipe versions deactivate previous ones automatically.
 The historical version remains immutable as the truth of what was consumed.
 """
+from decimal import Decimal
+
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.receta import (
     RecetaVersion,
@@ -28,7 +32,75 @@ from app.schemas.receta_schema import (
 )
 
 
+async def _calcular_costo_version(db: AsyncSession, version_id: int) -> Decimal:
+    """Calculate and persist cost breakdown for all detail lines in a RecetaVersion.
+
+    Writes costo_unitario, costo_total, pct_participacion on each detalle line
+    and updates RecetaVersion.costo_total. Returns the computed total cost.
+    """
+    lineas: list[tuple] = []  # (detalle_obj, costo_line)
+
+    # ── Detalles insumo ──────────────────────────────────────────────────────
+    res = await db.execute(
+        select(RecetaDetalleInsumo)
+        .options(selectinload(RecetaDetalleInsumo.insumo))
+        .where(RecetaDetalleInsumo.id_receta_version == version_id)
+    )
+    for d in res.scalars().all():
+        insumo = d.insumo
+        if insumo and insumo.precio is not None:
+            if insumo.pct_rendimiento:
+                costo_unit = insumo.precio / (insumo.pct_rendimiento / Decimal("100"))
+            else:
+                costo_unit = insumo.precio
+        else:
+            costo_unit = Decimal("0")
+        costo_line = d.cantidad * costo_unit
+        d.costo_unitario = costo_unit
+        d.costo_total = costo_line
+        lineas.append((d, costo_line))
+
+    # ── Detalles subreceta ───────────────────────────────────────────────────
+    res = await db.execute(
+        select(RecetaDetalleSubreceta)
+        .options(selectinload(RecetaDetalleSubreceta.subreceta))
+        .where(RecetaDetalleSubreceta.id_receta_version == version_id)
+    )
+    for d in res.scalars().all():
+        sub = d.subreceta
+        costo_sub = Decimal(str(sub.costo_total or 0)) if sub else Decimal("0")
+        porciones = Decimal(str(sub.porciones or 1)) if sub else Decimal("1")
+        costo_unit = costo_sub / porciones
+        costo_line = d.cantidad * costo_unit
+        d.costo_unitario = costo_unit
+        d.costo_total = costo_line
+        lineas.append((d, costo_line))
+
+    sum_total = sum(c for _, c in lineas) if lineas else Decimal("0")
+    divisor = sum_total if sum_total else Decimal("1")
+
+    for d, costo_line in lineas:
+        d.pct_participacion = (costo_line / divisor * 100).quantize(Decimal("0.01"))
+
+    version = await db.get(RecetaVersion, version_id)
+    if version:
+        version.costo_total = sum_total
+
+    await db.flush()
+    return sum_total
+
+
 # ── RecetaVersion ─────────────────────────────────────────────────────────────
+
+async def listar_todas_las_versiones(
+    db: AsyncSession,
+    *,
+    solo_vigente: bool = False,
+    skip: int = 0,
+    limit: int = 50,
+) -> list[RecetaVersion]:
+    return await receta_repo.get_all_versions(db, solo_vigente=solo_vigente, skip=skip, limit=limit)
+
 
 async def listar_versiones(
     db: AsyncSession, producto_id: int, *, solo_vigente: bool = False
@@ -76,6 +148,9 @@ async def crear_version(db: AsyncSession, payload: RecetaVersionCreate) -> Recet
     for p in payload.pasos:
         paso = RecetaPaso(id_receta_version=version.id_receta_version, **p.model_dump())
         await receta_repo.create_paso(db, paso)
+
+    await db.flush()
+    await _calcular_costo_version(db, version.id_receta_version)
 
     await db.commit()
     return await receta_repo.get_version_by_id(db, version.id_receta_version)

@@ -121,25 +121,65 @@ async def _write_auditoria(
         logger.warning("AuditoriaMiddleware: failed to write audit record — %s", exc)
 
 
+async def _write_auditoria_fallida(descripcion: str, ip: str, user_agent: str) -> None:
+    try:
+        import datetime
+
+        def _now():
+            return datetime.datetime.now(datetime.timezone.utc)
+
+        async with AsyncSessionLocal() as session:
+            auditoria = Auditoria(
+                id_usuario=None,
+                entidad="auth",
+                id_registro=None,
+                accion="ACCESS_DENIED",
+                estado="fallido",
+                descripcion=descripcion,
+                payload=None,
+                ip=ip,
+                user_agent=user_agent,
+                fecha=_now(),
+            )
+            session.add(auditoria)
+            await session.commit()
+    except Exception as exc:
+        logger.warning("AuditoriaMiddleware: failed to write access-denied audit record — %s", exc)
+
+
 class AuditoriaMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         if request.method not in _AUDITED_METHODS:
             return await call_next(request)
 
-        # Buffer request body so we can pass it to the audit writer.
-        body_bytes = await request.body()
-
-        # Rebuild the receive channel so FastAPI can still read the body.
-        async def _receive():
-            return {"type": "http.request", "body": body_bytes, "more_body": False}
-
-        request._receive = _receive  # type: ignore[assignment]
-
         response = await call_next(request)
 
-        # Only audit successful responses.
+        # Log failed access attempts asynchronously, then return immediately.
+        # Do NOT read the request body for 401/403 — the ASGI receive channel
+        # may be in an inconsistent state when the auth dependency short-circuits.
+        if response.status_code in (401, 403):
+            asyncio.create_task(
+                _write_auditoria_fallida(
+                    descripcion=f"Acceso denegado: {request.method} {request.url.path}",
+                    ip=request.client.host if request.client else "",
+                    user_agent=request.headers.get("user-agent", ""),
+                )
+            )
+            return response
+
+        # Skip audit for all other error responses.
         if response.status_code >= 400:
             return response
+
+        # Read request body only after confirming a successful response and
+        # only for methods that carry a body. FastAPI caches request._body
+        # during Pydantic model parsing, so request.body() is safe here.
+        body_bytes = b""
+        if request.method != "GET":
+            try:
+                body_bytes = await request.body()
+            except Exception:
+                pass
 
         # Parse request body for payload (best-effort).
         payload: dict | None = None

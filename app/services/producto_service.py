@@ -7,7 +7,6 @@ Issue: #40
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.models.producto import Producto
 from app.repositories import producto_repo
 from app.schemas.producto_schema import ProductoCreate, ProductoUpdate
@@ -70,5 +69,5 @@ async def actualizar_producto(
 
 async def eliminar_producto(db: AsyncSession, producto_id: int) -> None:
     producto = await obtener_producto(db, producto_id)
-    await producto_repo.delete(db, producto)
+    await producto_repo.update(db, producto, {"activo": False})
     await db.commit()

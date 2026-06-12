@@ -3,15 +3,11 @@ pedido_schema.py
 Pydantic schemas for Pedido, PedidoItem, and PedidoServicio.
 Mesero flow: abierto → enviado → pagado | cancelado
 PedidoItem flow: pendiente → en_preparacion → listo → entregado | cancelado
-
-Author: Jherson / SebasValero12
-Issue: #40
 """
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 from typing import Optional
-
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -104,5 +100,6 @@ class PedidoResponse(PedidoBase):
     id_usuario: int
     fecha_hora: datetime
     estado: EstadoPedidoEnum
+    total: Decimal = Decimal("0")
     items: list[PedidoItemResponse] = []
     servicios: list[PedidoServicioResponse] = []

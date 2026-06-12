@@ -41,8 +41,11 @@ class UsuarioRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_all(self):
-        result = await self.db.execute(select(Usuario))
+    async def get_all(self, solo_activos: bool = False):
+        query = select(Usuario)
+        if solo_activos:
+            query = query.where(Usuario.activo.is_(True))
+        result = await self.db.execute(query)
         return result.scalars().all()
 
     async def get_by_id(self, id_usuario: int):

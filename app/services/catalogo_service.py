@@ -33,8 +33,8 @@ class UsuarioService:
     def __init__(self, db: AsyncSession):
         self.repo = UsuarioRepository(db)
 
-    async def listar(self):
-        return await self.repo.get_all()
+    async def listar(self, solo_activos: bool = False):
+        return await self.repo.get_all(solo_activos=solo_activos)
 
     async def obtener(self, id_usuario: int):
         return await self.repo.get_by_id(id_usuario)
