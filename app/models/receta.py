@@ -26,6 +26,7 @@ class RecetaVersion(Base):
     version = Column(Integer, nullable=False)
     vigente = Column(Boolean, default=True)
     fecha_creacion = Column(DateTime(timezone=True), default=_now)
+    fecha_modificacion = Column(DateTime(timezone=True), onupdate=_now)
     costo_total = Column(Numeric(14, 4))
     tiempo_preparacion_min = Column(Integer)
     instrucciones_generales = Column(String)

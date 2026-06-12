@@ -64,7 +64,7 @@ _V1 = "/api/v1"
 app.include_router(auth.router, prefix=_V1)
 app.include_router(producto.router, prefix=_V1, tags=["Productos"])
 app.include_router(receta.router, prefix=_V1)
-app.include_router(insumo.router, prefix=_V1)
+app.include_router(insumo.router, prefix=_V1, tags=["Insumos"])
 app.include_router(orden_compra.router, prefix=_V1, tags=["Ordenes de Compra"])
 app.include_router(catalogo.router, prefix=_V1)
 app.include_router(proveedor.router, prefix=_V1, tags=["Proveedores"])

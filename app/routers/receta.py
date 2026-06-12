@@ -57,6 +57,19 @@ async def listar_versiones(
 
 
 @router.get(
+    "/producto/{producto_id}/historial",
+    response_model=list[RecetaVersionResponse],
+    summary="Historial completo de versiones de receta de un producto",
+)
+async def historial_recetas(
+    producto_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    return await receta_service.listar_versiones(db, producto_id, solo_vigente=False)
+
+
+@router.get(
     "/{version_id}",
     response_model=RecetaVersionResponse,
     summary="Obtener versión de receta por ID",
