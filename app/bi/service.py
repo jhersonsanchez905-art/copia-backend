@@ -14,9 +14,9 @@ Issue: BI-001
 """
 
 from datetime import date, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from zoneinfo import ZoneInfo
 
 from app.bi import etl_service, repo
 from app.bi.schemas import (
