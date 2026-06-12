@@ -7,7 +7,7 @@ from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 from typing import Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class EstadoAjusteEnum(str, Enum):
@@ -21,6 +21,13 @@ class AjusteInventarioCreate(BaseModel):
     cantidad: Decimal = Field(..., description="Positive to add stock, negative to subtract")
     motivo: str = Field(..., min_length=1)
     observacion: Optional[str] = None
+
+    @field_validator("cantidad")
+    @classmethod
+    def cantidad_no_cero(cls, v: Decimal) -> Decimal:
+        if v == 0:
+            raise ValueError("La cantidad del ajuste no puede ser cero")
+        return v
 
 
 class AjusteInventarioAprobacion(BaseModel):

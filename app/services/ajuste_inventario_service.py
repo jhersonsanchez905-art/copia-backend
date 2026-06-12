@@ -31,6 +31,16 @@ async def solicitar_ajuste(
     insumo = await insumo_repo.get_insumo_by_id(db, data.id_insumo)
     if not insumo:
         raise MajesaError(f"Insumo {data.id_insumo} no encontrado", 404)
+    if not insumo.activo:
+        raise MajesaError(f"El insumo '{insumo.nombre}' está inactivo y no puede ajustarse", 422)
+
+    pendiente = await ajuste_inventario_repo.get_ajuste_pendiente_by_insumo(db, data.id_insumo)
+    if pendiente:
+        raise MajesaError(
+            f"Ya existe un ajuste pendiente (id={pendiente.id_ajuste}) para este insumo. "
+            "Resuélvelo antes de crear uno nuevo.",
+            409,
+        )
 
     ajuste = AjusteInventario(
         id_insumo=data.id_insumo,
