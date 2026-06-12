@@ -22,6 +22,7 @@ from app.models.caja import (
     CierreCajaDetalle,
     Denominacion,
 )
+from app.models.catalogo import MetodoPago
 from app.models.venta import Pago, Venta
 
 
@@ -57,6 +58,18 @@ async def get_denominacion_by_id(
 ) -> Optional[Denominacion]:
     result = await db.execute(
         select(Denominacion).where(Denominacion.id_denominacion == id_denominacion)
+    )
+    return result.scalar_one_or_none()
+
+
+# ── MetodoPago ────────────────────────────────────────────────────────────────
+
+async def get_metodo_pago_efectivo(db: AsyncSession) -> Optional[MetodoPago]:
+    """Return the first cash payment method (requiere_comprobante = False)."""
+    result = await db.execute(
+        select(MetodoPago)
+        .where(MetodoPago.requiere_comprobante.is_(False), MetodoPago.activo.is_(True))
+        .limit(1)
     )
     return result.scalar_one_or_none()
 

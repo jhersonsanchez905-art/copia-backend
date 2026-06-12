@@ -74,19 +74,15 @@ class ArqueoDenominacionResponse(BaseModel):
 # ── Apertura Caja ─────────────────────────────────────────────────────────────
 
 class AperturaCajaRequest(BaseModel):
-    """Request schema to open a cash register shift."""
+    """Request schema to open a cash register shift.
+
+    monto_inicial is NOT required — it is computed server-side as the sum of
+    the arqueo denomination lines (valor × cantidad).
+    """
     turno:         TurnoEnum
     fecha:         date
-    monto_inicial: Decimal
     observaciones: Optional[str] = None
     arqueo:        List[ArqueoDenominacionRequest] = []
-
-    @field_validator("monto_inicial")
-    @classmethod
-    def monto_inicial_no_negativo(cls, v: Decimal) -> Decimal:
-        if v < 0:
-            raise ValueError("El monto inicial no puede ser negativo")
-        return v
 
     @model_validator(mode="after")
     def validar_arqueo(self) -> "AperturaCajaRequest":
