@@ -14,16 +14,16 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     DATABASE_URL: str
     CLERK_SECRET_KEY: str
-    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: str
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: str = "not-configured"
     RESEND_API_KEY: str = "not-configured"
     CLOUDINARY_URL: str = "not-configured"
     CRON_SECRET: str = "not-configured"
     GOOGLE_SHEETS_ID: str = "not-configured"
     ENVIRONMENT: str = "development"
     ALLOWED_ORIGINS: list[str] = [
-    "http://localhost:3000",
-    "http://localhost:5173",
-]
+        "http://localhost:3000",
+        "http://localhost:5173",
+    ]
 
     # ── Módulo BI ─────────────────────────────────────────────
     # URL del webhook de Vercel para purgar el caché al terminar el ETL
