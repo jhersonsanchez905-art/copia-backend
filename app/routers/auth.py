@@ -4,7 +4,7 @@ Endpoint de registro automático: crea el usuario en pos.usuario la primera
 vez que se autentica con Clerk, usando sus datos del perfil de Clerk.
 """
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

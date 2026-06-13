@@ -14,7 +14,9 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-
+# ── Módulo BI ─────────────────────────────────────────────────────────────────
+# BI module router — only the BI team should modify app/bi/
+from app.bi import router as bi_router
 from app.config import settings
 from app.exceptions import MajesaError, majesa_exception_handler
 from app.middleware.auditoria import AuditoriaMiddleware
@@ -50,9 +52,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         return response
 
-# ── Módulo BI ─────────────────────────────────────────────────────────────────
-# BI module router — only the BI team should modify app/bi/
-from app.bi import router as bi_router
+
 
 app = FastAPI(
     title="Majesa API",
