@@ -7,12 +7,12 @@ Issue: #16
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import Request
-from app.limiter import limiter
+
 from app.database import get_db
 from app.dependencies import get_current_user, require_rol
+from app.limiter import limiter
 from app.models.catalogo import Usuario
 from app.schemas.venta_schema import VentaCreateRequest, VentaResponse
 from app.services import venta_service
@@ -58,7 +58,7 @@ async def get_venta(id_venta: int, db: AsyncSession = Depends(get_db), current_u
 
 @router.get("/", response_model=list[VentaResponse])
 async def get_ventas(
-    fecha: date = Query(..., description="Date to filter sales (YYYY-MM-DD)"),
+    fecha: Optional[date] = Query(default=None, description="Date to filter sales (YYYY-MM-DD). Defaults to today."),
     turno: Optional[str] = Query(None, description="Shift: manana or tarde"),
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),

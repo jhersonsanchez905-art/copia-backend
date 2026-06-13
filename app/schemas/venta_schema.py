@@ -47,6 +47,16 @@ class ItemVentaResponse(BaseModel):
     receta_snapshot: Optional[Any] = None
 
 
+# ── MetodoPago ────────────────────────────────────────────────────────────────
+
+class MetodoPagoResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id_metodo_pago: int
+    nombre: str
+    requiere_comprobante: bool
+
+
 # ── Pago ──────────────────────────────────────────────────────────────────────
 
 class PagoRequest(BaseModel):
@@ -64,11 +74,7 @@ class PagoResponse(BaseModel):
     monto: Decimal
     url_comprobante: Optional[str] = None
     estado_validacion: EstadoValidacionEnum
-
-
-class ValidarPagoRequest(BaseModel):
-    estado_validacion: EstadoValidacionEnum
-    id_usuario_validacion: int
+    metodo_pago: MetodoPagoResponse
 
 
 class PagoDetalleResponse(PagoResponse):

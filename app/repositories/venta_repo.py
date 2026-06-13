@@ -7,12 +7,14 @@ Only database queries here, no business logic.
 Author: Suley Suarez
 Issue: #16
 """
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 from datetime import date
 from typing import Optional
-from app.models.venta import Venta, ItemVenta, Pago, Factura
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.models.venta import Factura, ItemVenta, Pago, Venta
 
 
 async def create_venta(venta: Venta, db: AsyncSession) -> Venta:
@@ -29,8 +31,8 @@ async def get_venta_by_id(id_venta: int, db: AsyncSession) -> Optional[Venta]:
         select(Venta)
         .options(
             selectinload(Venta.items),
-            selectinload(Venta.pagos),
-            selectinload(Venta.factura)
+            selectinload(Venta.pagos).selectinload(Pago.metodo_pago),
+            selectinload(Venta.factura),
         )
         .where(Venta.id_venta == id_venta)
     )
@@ -38,16 +40,25 @@ async def get_venta_by_id(id_venta: int, db: AsyncSession) -> Optional[Venta]:
 
 
 async def get_ventas_by_fecha_turno(
-    fecha: date,
+    fecha: Optional[date],
     turno: Optional[str],
-    db: AsyncSession
+    db: AsyncSession,
 ) -> list[Venta]:
-    """Retrieve all sales for a given date and optional shift."""
-    query = select(Venta).where(Venta.fecha.cast(date) == fecha)
+    """Retrieve all sales for a given date (defaults to today) and optional shift."""
+    fecha_filtro = fecha or date.today()
+    query = (
+        select(Venta)
+        .options(
+            selectinload(Venta.items),
+            selectinload(Venta.pagos).selectinload(Pago.metodo_pago),
+            selectinload(Venta.factura),
+        )
+        .where(Venta.fecha.cast(date) == fecha_filtro)
+    )
     if turno:
         query = query.where(Venta.turno == turno)
     result = await db.execute(query)
-    return result.scalars().all()
+    return list(result.scalars().all())
 
 
 async def create_item_venta(item: ItemVenta, db: AsyncSession) -> ItemVenta:
@@ -98,7 +109,7 @@ async def get_by_idempotency_token(db: AsyncSession, token: str) -> Optional[Ven
         select(Venta)
         .options(
             selectinload(Venta.items),
-            selectinload(Venta.pagos),
+            selectinload(Venta.pagos).selectinload(Pago.metodo_pago),
             selectinload(Venta.factura),
         )
         .where(Venta.token_idempotencia == token)
