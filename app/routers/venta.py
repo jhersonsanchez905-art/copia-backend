@@ -58,7 +58,7 @@ async def get_venta(id_venta: int, db: AsyncSession = Depends(get_db), current_u
 
 @router.get("/", response_model=list[VentaResponse])
 async def get_ventas(
-    fecha: date = Query(..., description="Date to filter sales (YYYY-MM-DD)"),
+    fecha: Optional[date] = Query(default=None, description="Date to filter sales (YYYY-MM-DD). Defaults to today."),
     turno: Optional[str] = Query(None, description="Shift: manana or tarde"),
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),

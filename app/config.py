@@ -14,6 +14,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     DATABASE_URL: str
     CLERK_SECRET_KEY: str
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: str
     RESEND_API_KEY: str = "not-configured"
     CLOUDINARY_URL: str = "not-configured"
     CRON_SECRET: str = "not-configured"

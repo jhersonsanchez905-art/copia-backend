@@ -379,34 +379,3 @@ async def get_ventas_by_fecha_turno(
     return await venta_repo.get_ventas_by_fecha_turno(fecha, turno, db)
 
 
-async def validar_pago(
-    id_pago: int,
-    data,
-    db: AsyncSession,
-) -> Pago:
-    pago = await venta_repo.get_pago_by_id(id_pago, db)
-    if not pago:
-        raise MajesaError(f"Pago {id_pago} no encontrado", 404)
-
-    if pago.estado_validacion != "pendiente":
-        raise MajesaError("El pago ya fue validado", 409)
-
-    if not pago.metodo_pago.requiere_comprobante:
-        raise MajesaError("Este método de pago no requiere validación", 422)
-
-    if data.estado_validacion.value == "pendiente":
-        raise MajesaError(
-            "El estado de validación debe ser aprobado o rechazado", 422
-        )
-
-    pago = await venta_repo.update_pago(
-        pago,
-        {
-            "estado_validacion": data.estado_validacion.value,
-            "id_usuario_validacion": data.id_usuario_validacion,
-            "fecha_validacion": _now(),
-        },
-        db,
-    )
-    await db.commit()
-    return pago
