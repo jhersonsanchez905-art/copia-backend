@@ -16,3 +16,4 @@ httpx==0.28.1
 tzdata==2026.2
 psycopg2-binary==2.9.9
 ruff==0.4.4
+slowapi==0.1.9

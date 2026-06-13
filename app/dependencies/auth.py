@@ -92,3 +92,21 @@ async def get_current_user(
         raise HTTPException(status_code=403, detail="Usuario inactivo")
 
     return user
+class RequireRole:
+    """
+    FastAPI dependency to protect routes based on user role.
+    Usage: Depends(RequireRole(["administrador", "cajero"]))
+    """
+    def __init__(self, allowed_roles: list[str]):
+        self.allowed_roles = allowed_roles
+
+    async def __call__(
+        self,
+        current_user: Usuario = Depends(get_current_user)
+    ) -> Usuario:
+        if not current_user.rol or current_user.rol.nombre not in self.allowed_roles:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Permisos insuficientes. Se requiere uno de los siguientes roles: {', '.join(self.allowed_roles)}"
+            )
+        return current_user

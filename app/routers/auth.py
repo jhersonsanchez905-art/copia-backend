@@ -4,12 +4,13 @@ Endpoint de registro automático: crea el usuario en pos.usuario la primera
 vez que se autentica con Clerk, usando sus datos del perfil de Clerk.
 """
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
-
+from fastapi import APIRouter, Depends, HTTPException, Request
+from app.limiter import limiter
 from app.config import settings
 from app.database import get_db
 from app.dependencies.auth import _verify_session_with_clerk, get_current_user
@@ -25,9 +26,10 @@ _security = HTTPBearer(auto_error=False)
 async def me(current_user: Usuario = Depends(get_current_user)):
     return current_user
 
-
 @router.post("/register", response_model=UsuarioOut, summary="Registrar usuario desde Clerk")
+@limiter.limit("5/minute")
 async def register(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_security),
     db: AsyncSession = Depends(get_db),
 ):

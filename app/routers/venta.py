@@ -9,7 +9,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from fastapi import Request
+from app.limiter import limiter
 from app.database import get_db
 from app.dependencies import get_current_user, require_rol
 from app.models.catalogo import Usuario
@@ -20,7 +21,9 @@ router = APIRouter()
 
 
 @router.post("/", response_model=VentaResponse, status_code=201)
+@limiter.limit("30/minute")
 async def registrar_venta(
+    request: Request,
     data: VentaCreateRequest,
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(require_rol("cajero", "administrador")),
