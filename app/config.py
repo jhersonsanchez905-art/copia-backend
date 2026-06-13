@@ -18,7 +18,11 @@ class Settings(BaseSettings):
     CLOUDINARY_URL: str = "not-configured"
     CRON_SECRET: str = "not-configured"
     GOOGLE_SHEETS_ID: str = "not-configured"
-    ALLOWED_ORIGINS: list[str] = ["http://localhost:3000"]
+    ENVIRONMENT: str = "development"
+    ALLOWED_ORIGINS: list[str] = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+]
 
     # ── Módulo BI ─────────────────────────────────────────────
     # URL del webhook de Vercel para purgar el caché al terminar el ETL
