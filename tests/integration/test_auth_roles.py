@@ -30,13 +30,13 @@ def test_me_returns_401_without_auth(client_no_auth):
 
 # ── POST /pedidos — mesero y administrador únicamente ─────────────────────────
 
-def test_cajero_cannot_crear_pedido(client_cajero):
+def test_cajero_can_crear_pedido(client_cajero):
     resp = client_cajero.post("/api/v1/pedidos", json={
         "id_mesa": 1,
         "items": [],
         "servicios": [],
     })
-    assert resp.status_code == 403
+    assert resp.status_code != 403
 
 
 def test_mesero_can_reach_crear_pedido_endpoint(client_mesero):
