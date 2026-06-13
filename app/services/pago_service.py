@@ -14,13 +14,20 @@ Author: SebastianValero12
 Issue: RF-012 — fix/reservas-transferencias
 """
 import datetime
+import os
+import uuid
 
+import aiofiles
+from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import MajesaError
 from app.models.venta import Pago
 from app.repositories import pago_repo
 from app.schemas.pago_schema import ValidarPagoRequest
+
+_UPLOAD_DIR = "uploads/comprobantes"
+os.makedirs(_UPLOAD_DIR, exist_ok=True)
 
 
 _VALID_TARGETS: set[str] = {"aprobado", "rechazado"}
@@ -82,4 +89,29 @@ async def validar_pago(
         },
     )
     await db.commit()
+    return pago
+
+
+async def subir_comprobante(
+    db: AsyncSession,
+    id_pago: int,
+    archivo: UploadFile,
+    id_usuario: int,
+) -> Pago:
+    """Save the uploaded proof-of-transfer file and update Pago.url_comprobante."""
+    pago = await pago_repo.get_by_id(db, id_pago)
+    if not pago:
+        raise MajesaError("Pago no encontrado", 404)
+
+    ext = archivo.filename.rsplit(".", 1)[-1] if archivo.filename and "." in archivo.filename else "bin"
+    filename = f"{id_pago}_{uuid.uuid4().hex}.{ext}"
+    filepath = os.path.join(_UPLOAD_DIR, filename)
+
+    content = await archivo.read()
+    async with aiofiles.open(filepath, "wb") as f:
+        await f.write(content)
+
+    pago.url_comprobante = filepath
+    await db.flush()
+    await db.refresh(pago)
     return pago

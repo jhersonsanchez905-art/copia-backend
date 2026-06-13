@@ -10,6 +10,7 @@ Issue: #16
 from decimal import Decimal
 from datetime import datetime, timezone
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import MajesaError
@@ -66,11 +67,20 @@ async def abrir_caja(
         MajesaError 409: If there is already an open (unclosed) shift for this user.
         MajesaError 404/422: If any denomination in the arqueo is invalid.
     """
+    # Block if this user already has an open shift (any turno/fecha)
     existente = await caja_repo.get_apertura_sin_cierre(id_usuario, db)
     if existente:
         raise MajesaError(
             f"Ya existe una apertura activa (id={existente.id_apertura}) para este usuario. "
             "Cierra el turno actual antes de abrir uno nuevo.",
+            409,
+        )
+
+    # Block if any user has an OPEN (unclosed) apertura for this same turno+fecha
+    abierta = await caja_repo.get_apertura_abierta_por_turno_fecha(data.turno, data.fecha, db)
+    if abierta:
+        raise MajesaError(
+            "Ya existe una apertura abierta para este turno y fecha",
             409,
         )
 
@@ -96,18 +106,22 @@ async def abrir_caja(
         hora_apertura=datetime.now(timezone.utc),
         observaciones=data.observaciones,
     )
-    apertura = await caja_repo.create_apertura(apertura, db)
 
-    for id_den, cantidad, subtotal in lineas_arqueo:
-        await caja_repo.create_apertura_arqueo(
-            AperturaCajaArqueo(
-                id_apertura=apertura.id_apertura,
-                id_denominacion=id_den,
-                cantidad=cantidad,
-                subtotal=subtotal,
-            ),
-            db,
-        )
+    try:
+        apertura = await caja_repo.create_apertura(apertura, db)
+        for id_den, cantidad, subtotal in lineas_arqueo:
+            await caja_repo.create_apertura_arqueo(
+                AperturaCajaArqueo(
+                    id_apertura=apertura.id_apertura,
+                    id_denominacion=id_den,
+                    cantidad=cantidad,
+                    subtotal=subtotal,
+                ),
+                db,
+            )
+    except IntegrityError:
+        await db.rollback()
+        raise MajesaError("Conflicto al crear apertura de caja", 409)
 
     # Reload with arqueo + denominacion eagerly loaded for proper serialization
     return await caja_repo.get_apertura_by_id(apertura.id_apertura, db)

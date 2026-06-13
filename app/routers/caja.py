@@ -1,11 +1,10 @@
 """
 app/routers/caja.py
 HTTP endpoints for cash register module.
-Author: Suley Suarez / Jherson
+Author: Suley Suarez / Sebastián
 Issue: #16, #40
 """
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.exc import IntegrityError
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -37,13 +36,7 @@ async def abrir_caja(
     db: AsyncSession = Depends(get_db),
     current_user: Usuario = Depends(require_rol("cajero", "administrador")),
 ):
-    try:
-        return await caja_service.abrir_caja(data, current_user.id_usuario, db)
-    except IntegrityError:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Ya existe una apertura de caja activa para este usuario.",
-        )
+    return await caja_service.abrir_caja(data, current_user.id_usuario, db)
 
 
 @router.get("/apertura/activa", response_model=AperturaCajaResponse)
