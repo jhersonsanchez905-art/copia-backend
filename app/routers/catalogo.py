@@ -8,8 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from app.database import get_db
-from app.dependencies.auth import get_current_user
-from app.dependencies.roles import require_rol
+from app.dependencies import get_current_user, require_rol
 from app.models.catalogo import Usuario
 from app.services.catalogo_service import (
     RolService, UsuarioService, ClienteService, MarcaService,
@@ -54,12 +53,12 @@ async def eliminar_rol(id_rol: int, db: AsyncSession = Depends(get_db), current_
 async def listar_usuarios(
     solo_activos: bool = Query(True, description="Solo usuarios activos"),
     db: AsyncSession = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_rol("administrador")),
 ):
     return await UsuarioService(db).listar(solo_activos=solo_activos)
 
 @router.get("/usuarios/{id_usuario}", response_model=UsuarioOut)
-async def obtener_usuario(id_usuario: int, db: AsyncSession = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+async def obtener_usuario(id_usuario: int, db: AsyncSession = Depends(get_db), current_user: Usuario = Depends(require_rol("administrador"))):
     obj = await UsuarioService(db).obtener(id_usuario)
     if not obj:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")

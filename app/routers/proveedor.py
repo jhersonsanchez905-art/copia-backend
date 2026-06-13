@@ -8,8 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from app.database import get_db
-from app.dependencies.auth import get_current_user
-from app.dependencies.roles import require_rol
+from app.dependencies import get_current_user, require_rol
 from app.models.catalogo import Usuario
 from app.services.proveedor_service import ProveedorService, InsumoProveedorService
 from app.schemas.proveedor_schema import (

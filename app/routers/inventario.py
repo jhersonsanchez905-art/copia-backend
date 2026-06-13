@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies.auth import get_current_user
+from app.dependencies import get_current_user
 from app.exceptions import MajesaError
 from app.models.catalogo import Usuario
 from app.repositories import insumo_repo
