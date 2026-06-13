@@ -15,6 +15,17 @@ async def get_stocks_by_insumos(db: AsyncSession, ids: list[int]) -> dict[int, "
     return {s.id_insumo: s for s in result.scalars().all()}
 
 
+async def get_stocks_by_insumos_for_update(
+    db: AsyncSession, ids: list[int]
+) -> dict[int, "Stock"]:
+    """Same as get_stocks_by_insumos but acquires row-level locks (SELECT ... FOR UPDATE).
+    Use before any stock deduction to prevent overselling under concurrent requests."""
+    result = await db.execute(
+        select(Stock).where(Stock.id_insumo.in_(ids)).with_for_update()
+    )
+    return {s.id_insumo: s for s in result.scalars().all()}
+
+
 async def get_stock_by_insumo(db: AsyncSession, id_insumo: int) -> Stock | None:
     result = await db.execute(
         select(Stock)

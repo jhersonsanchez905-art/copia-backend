@@ -80,6 +80,32 @@ async def get_pago_by_id(id_pago: int, db: AsyncSession) -> Optional[Pago]:
     return result.scalar_one_or_none()
 
 
+async def get_venta_completada_by_pedido(
+    db: AsyncSession, id_pedido: int
+) -> Optional[Venta]:
+    """Return a completed sale for the given pedido, if one exists."""
+    result = await db.execute(
+        select(Venta)
+        .where(Venta.id_pedido == id_pedido, Venta.estado == "completada")
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_by_idempotency_token(db: AsyncSession, token: str) -> Optional[Venta]:
+    """Return a completed sale that matches the given idempotency token, if any."""
+    result = await db.execute(
+        select(Venta)
+        .options(
+            selectinload(Venta.items),
+            selectinload(Venta.pagos),
+            selectinload(Venta.factura),
+        )
+        .where(Venta.token_idempotencia == token)
+    )
+    return result.scalar_one_or_none()
+
+
 async def update_pago(pago: Pago, data: dict, db: AsyncSession) -> Pago:
     for key, value in data.items():
         setattr(pago, key, value)

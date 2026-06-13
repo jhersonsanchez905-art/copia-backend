@@ -26,9 +26,10 @@ def _subreceta(id, id_subreceta, cantidad, id_unidad):
     return d
 
 
-def _version(id_receta_version=1, version=1, insumos=None, subrecetas=None):
+def _version(id_receta_version=1, version=1, insumos=None, subrecetas=None, id_producto=10):
     v = MagicMock()
     v.id_receta_version = id_receta_version
+    v.id_producto = id_producto
     v.version = version
     v.detalles_insumo = insumos or []
     v.detalles_subreceta = subrecetas or []
@@ -38,16 +39,25 @@ def _version(id_receta_version=1, version=1, insumos=None, subrecetas=None):
 def test_snapshot_top_level_keys():
     snap = _build_snapshot(_version())
     assert "id_receta_version" in snap
+    assert "id_producto" in snap
+    assert "nombre_producto" in snap
     assert "version" in snap
     assert "detalles_insumo" in snap
     assert "detalles_subreceta" in snap
 
 
 def test_snapshot_correct_ids():
-    v = _version(id_receta_version=7, version=3)
-    snap = _build_snapshot(v)
+    v = _version(id_receta_version=7, version=3, id_producto=42)
+    snap = _build_snapshot(v, "Café Americano")
     assert snap["id_receta_version"] == 7
+    assert snap["id_producto"] == 42
+    assert snap["nombre_producto"] == "Café Americano"
     assert snap["version"] == 3
+
+
+def test_snapshot_nombre_producto_none_when_omitted():
+    snap = _build_snapshot(_version())
+    assert snap["nombre_producto"] is None
 
 
 def test_snapshot_empty_recipe():
