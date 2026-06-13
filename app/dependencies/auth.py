@@ -69,10 +69,12 @@ async def _verify_session_with_clerk(token: str) -> str:
         raise HTTPException(status_code=401, detail=f"Error verificando token: {e}")
 
 
-async def get_current_user(
+async def get_authenticated_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_security),
     db: AsyncSession = Depends(get_db),
 ) -> Usuario:
+    """Verifica token, existencia y activo. No exige rol asignado.
+    Usar solo en /auth/me para que el frontend detecte el estado pendiente."""
     if credentials is None:
         raise HTTPException(status_code=401, detail="Token de autorizacion requerido")
 
@@ -90,5 +92,22 @@ async def get_current_user(
 
     if not user.activo:
         raise HTTPException(status_code=403, detail="Usuario inactivo")
+
+    return user
+
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_security),
+    db: AsyncSession = Depends(get_db),
+) -> Usuario:
+    """Verifica token, existencia, activo y que tenga rol asignado.
+    Usar en todos los endpoints protegidos."""
+    user = await get_authenticated_user(credentials, db)
+
+    if user.rol is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Tu cuenta está pendiente de activación. Contacta a un administrador para que te asigne un rol.",
+        )
 
     return user

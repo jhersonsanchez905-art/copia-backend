@@ -8,13 +8,13 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.config import settings
 from app.database import get_db
-from app.dependencies import get_current_user
-from app.dependencies.auth import _verify_session_with_clerk
+from app.dependencies.auth import _verify_session_with_clerk, get_authenticated_user
 from app.exceptions import MajesaError
 from app.limiter import limiter
 from app.models.catalogo import Rol, Usuario
@@ -26,7 +26,7 @@ _security = HTTPBearer(auto_error=False)
 
 
 @router.get("/me", response_model=UsuarioOut, summary="Usuario autenticado actual")
-async def me(current_user: Usuario = Depends(get_current_user)):
+async def me(current_user: Usuario = Depends(get_authenticated_user)):
     return current_user
 
 @router.post("/register", response_model=UsuarioOut, summary="Registrar usuario desde Clerk")
@@ -96,14 +96,23 @@ async def register(
             raise MajesaError("Rol 'administrador' no encontrado en el sistema", 500)
         id_rol = rol_obj.id_rol
 
-    new_user = Usuario(
-        clerk_id=clerk_user_id,
-        nombre=nombre,
-        correo=correo,
-        id_rol=id_rol,
-        activo=True,
+    await db.execute(
+        pg_insert(Usuario)
+        .values(
+            clerk_id=clerk_user_id,
+            nombre=nombre,
+            correo=correo,
+            id_rol=id_rol,
+            activo=True,
+        )
+        .on_conflict_do_nothing(index_elements=["clerk_id"])
     )
-    db.add(new_user)
     await db.commit()
-    await db.refresh(new_user)
-    return new_user
+
+    # Fetch the row regardless of whether INSERT won or lost the race.
+    result = await db.execute(
+        select(Usuario)
+        .options(joinedload(Usuario.rol))
+        .where(Usuario.clerk_id == clerk_user_id)
+    )
+    return result.scalar_one()
