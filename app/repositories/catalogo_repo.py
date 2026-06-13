@@ -254,3 +254,17 @@ class MetodoPagoRepository:
         await self.db.delete(obj)
         await self.db.commit()
         return True
+
+
+# ── Standalone helpers (function-based, used by services) ─────────────────────
+
+async def get_cliente_by_id(db: AsyncSession, id_cliente: int) -> Cliente | None:
+    result = await db.execute(select(Cliente).where(Cliente.id_cliente == id_cliente))
+    return result.scalar_one_or_none()
+
+
+async def get_metodo_pago_by_id(db: AsyncSession, id_metodo_pago: int) -> MetodoPago | None:
+    result = await db.execute(
+        select(MetodoPago).where(MetodoPago.id_metodo_pago == id_metodo_pago)
+    )
+    return result.scalar_one_or_none()

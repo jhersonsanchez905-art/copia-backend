@@ -34,6 +34,7 @@ class Venta(Base):
     total = Column(Numeric(16, 2), nullable=False, default=0)
     # abierta | completada | anulada
     estado = Column(String(20), nullable=False, default="abierta")
+    token_idempotencia = Column(String(64), unique=True, nullable=True, index=True)
 
     # --- relaciones ---
     apertura = relationship("AperturaCaja", back_populates="ventas")
