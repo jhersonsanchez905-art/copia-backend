@@ -1,13 +1,13 @@
 """merge heads before bi schema
 
 Revision ID: 2c4001937e5e
-Revises: 7d3f406e43b4, abf4a4a8d52a
+Revises: 008
 Create Date: 2026-06-11 10:13:13.932218
 """
 
 # revision identifiers, used by Alembic.
 revision = '2c4001937e5e'
-down_revision = ('7d3f406e43b4', 'abf4a4a8d52a')
+down_revision = '008'
 branch_labels = None
 depends_on = None
 

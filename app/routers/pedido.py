@@ -44,7 +44,7 @@ async def obtener_pedido(
 async def crear_pedido(
     data: PedidoCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: Usuario = Depends(require_rol("mesero", "administrador")),
+    current_user: Usuario = Depends(require_rol("cajero", "mesero", "administrador")),
 ):
     return await pedido_service.create_pedido(db, data, current_user.id_usuario)
 
@@ -61,7 +61,7 @@ async def cambiar_estado_pedido(
 
 @router.post(
     "/{id_pedido}/items",
-    response_model=PedidoItemResponse,
+    response_model=PedidoResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def agregar_item(

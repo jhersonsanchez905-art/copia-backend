@@ -73,7 +73,7 @@ class UsuarioRepository:
         obj = await self.get_by_id(id_usuario)
         if not obj:
             return False
-        await self.db.delete(obj)
+        obj.activo = False
         await self.db.commit()
         return True
 

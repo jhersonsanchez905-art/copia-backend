@@ -176,6 +176,7 @@ async def agregar_detalle_insumo(
     await obtener_version(db, version_id)
     detalle = RecetaDetalleInsumo(id_receta_version=version_id, **payload.model_dump())
     detalle = await receta_repo.create_detalle_insumo(db, detalle)
+    await _calcular_costo_version(db, version_id)
     await db.commit()
     return detalle
 
@@ -190,6 +191,7 @@ async def actualizar_detalle_insumo(
     if not data:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No se enviaron campos para actualizar")
     detalle = await receta_repo.update_detalle_insumo(db, detalle, data)
+    await _calcular_costo_version(db, detalle.id_receta_version)
     await db.commit()
     return detalle
 
@@ -210,6 +212,7 @@ async def agregar_detalle_subreceta(
     await obtener_version(db, version_id)
     detalle = RecetaDetalleSubreceta(id_receta_version=version_id, **payload.model_dump())
     detalle = await receta_repo.create_detalle_subreceta(db, detalle)
+    await _calcular_costo_version(db, version_id)
     await db.commit()
     return detalle
 
@@ -224,6 +227,7 @@ async def actualizar_detalle_subreceta(
     if not data:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No se enviaron campos para actualizar")
     detalle = await receta_repo.update_detalle_subreceta(db, detalle, data)
+    await _calcular_costo_version(db, detalle.id_receta_version)
     await db.commit()
     return detalle
 

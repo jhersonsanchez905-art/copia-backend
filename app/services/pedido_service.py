@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import MajesaError
 from app.models.pedido import Pedido, PedidoItem, PedidoServicio
-from app.repositories import mesa_repo, pedido_repo, servicio_adicional_repo
+from app.repositories import mesa_repo, pedido_repo, producto_repo, servicio_adicional_repo
 from app.schemas.pedido_schema import (
     PedidoCreate,
     PedidoItemCreate,
@@ -99,12 +99,18 @@ async def create_pedido(
     pedido = await pedido_repo.create_pedido(db, pedido)
 
     for item_data in data.items:
+        producto = await producto_repo.get_by_id(db, item_data.id_producto)
+        if not producto:
+            raise MajesaError(f"Producto {item_data.id_producto} no encontrado", 404)
+        if not producto.activo:
+            raise MajesaError(f"Producto '{producto.nombre}' está inactivo", 422)
+        precio_unitario = producto.precio
         item = PedidoItem(
             id_pedido=pedido.id_pedido,
             id_producto=item_data.id_producto,
             cantidad=item_data.cantidad,
-            precio_unitario=item_data.precio_unitario,
-            subtotal=item_data.precio_unitario * item_data.cantidad,
+            precio_unitario=precio_unitario,
+            subtotal=precio_unitario * item_data.cantidad,
             observaciones=item_data.observaciones,
             estado="pendiente",
         )
@@ -133,11 +139,15 @@ async def create_pedido(
 async def cambiar_estado_pedido(
     db: AsyncSession, id_pedido: int, nuevo_estado: str
 ) -> Pedido:
-    pedido = await get_pedido(db, id_pedido)
+    pedido = await pedido_repo.get_pedido_with_mesa(db, id_pedido)
+    if not pedido:
+        raise MajesaError(f"Pedido {id_pedido} no encontrado", 404)
     _validate_pedido_transition(pedido.estado, nuevo_estado)
-    pedido = await pedido_repo.update_pedido(db, pedido, {"estado": nuevo_estado})
+    await pedido_repo.update_pedido(db, pedido, {"estado": nuevo_estado})
+    if nuevo_estado == "cancelado" and pedido.mesa:
+        await mesa_repo.update_mesa(db, pedido.mesa, {"estado": "disponible"})
     await db.commit()
-    return pedido
+    return await pedido_repo.get_pedido_by_id(db, id_pedido)
 
 
 async def agregar_item(
@@ -146,12 +156,18 @@ async def agregar_item(
     pedido = await get_pedido(db, id_pedido)
     if pedido.estado not in ("abierto",):
         raise MajesaError("Solo se pueden agregar items a pedidos abiertos", 409)
+    producto = await producto_repo.get_by_id(db, data.id_producto)
+    if not producto:
+        raise MajesaError(f"Producto {data.id_producto} no encontrado", 404)
+    if not producto.activo:
+        raise MajesaError(f"Producto '{producto.nombre}' está inactivo", 422)
+    precio_unitario = producto.precio
     item = PedidoItem(
         id_pedido=id_pedido,
         id_producto=data.id_producto,
         cantidad=data.cantidad,
-        precio_unitario=data.precio_unitario,
-        subtotal=data.precio_unitario * data.cantidad,
+        precio_unitario=precio_unitario,
+        subtotal=precio_unitario * data.cantidad,
         observaciones=data.observaciones,
         estado="pendiente",
     )
