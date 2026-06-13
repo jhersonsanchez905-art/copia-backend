@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.database import get_db
-from app.dependencies.auth import get_current_user
+from app.dependencies.auth import get_authenticated_user, get_current_user
 from app.main import app
 from app.models.catalogo import Rol, Usuario
 
@@ -58,6 +58,7 @@ def _setup_client(user: Usuario, db: AsyncMock) -> TestClient:
         return user
 
     app.dependency_overrides[get_db] = _db
+    app.dependency_overrides[get_authenticated_user] = _get_user
     app.dependency_overrides[get_current_user] = _get_user
     return TestClient(app)
 

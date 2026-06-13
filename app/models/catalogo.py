@@ -28,7 +28,7 @@ class Usuario(Base):
     __table_args__ = {"schema": "pos"}
 
     id_usuario = Column(Integer, primary_key=True, index=True)
-    clerk_id = Column(String, nullable=False)
+    clerk_id = Column(String, nullable=False, unique=True)
     nombre = Column(String, nullable=False)
     correo = Column(String, nullable=False)
     id_rol = Column(Integer, ForeignKey("pos.rol.id_rol"))
