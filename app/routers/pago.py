@@ -9,13 +9,13 @@ Endpoints:
 Author: Iván Ospino / SebastianValero12
 Issue: RF-012 — fix/reservas-transferencias
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies.roles import require_rol
 from app.models.catalogo import Usuario
-from app.schemas.pago_schema import PagoDetalleResponse, ValidarPagoRequest
+from app.schemas.pago_schema import PagoDetalleResponse, PagoResponse, ValidarPagoRequest
 from app.services import pago_service
 
 router = APIRouter()
@@ -44,3 +44,18 @@ async def validar_pago(
         data=data,
         id_usuario_validacion=current_user.id_usuario,
     )
+
+
+@router.post(
+    "/{id_pago}/comprobante",
+    response_model=PagoResponse,
+    summary="Subir comprobante de transferencia",
+)
+async def subir_comprobante(
+    id_pago: int,
+    archivo: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(require_rol("cajero", "administrador")),
+):
+    """Upload a transfer proof image/PDF for a pending payment."""
+    return await pago_service.subir_comprobante(db, id_pago, archivo, current_user.id_usuario)

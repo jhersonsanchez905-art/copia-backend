@@ -107,6 +107,23 @@ async def get_apertura_activa(
     return result.scalar_one_or_none()
 
 
+async def get_apertura_abierta_por_turno_fecha(
+    turno: str, fecha, db: AsyncSession
+) -> Optional[AperturaCaja]:
+    """Return any unclosed apertura for the given turno and fecha, across all users."""
+    result = await db.execute(
+        select(AperturaCaja)
+        .outerjoin(CierreCaja, CierreCaja.id_apertura == AperturaCaja.id_apertura)
+        .where(
+            AperturaCaja.turno == turno,
+            AperturaCaja.fecha == fecha,
+            CierreCaja.id_cierre.is_(None),
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 async def get_apertura_sin_cierre_anterior(db: AsyncSession) -> Optional[AperturaCaja]:
     """Return any unclosed apertura from a day prior to today, across all users (RN-03)."""
     from datetime import date
