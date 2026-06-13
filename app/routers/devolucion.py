@@ -39,7 +39,7 @@ async def obtener_devolucion(
 async def crear_devolucion(
     data: DevolucionCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: Usuario = Depends(require_rol("cajero", "mesero", "administrador")),
+    current_user: Usuario = Depends(require_rol("cajero", "administrador")),
 ):
     return await devolucion_service.crear_devolucion(db, data)
 

@@ -5,16 +5,19 @@ vez que se autentica con Clerk, usando sus datos del perfil de Clerk.
 """
 import httpx
 
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
-from fastapi import APIRouter, Depends, HTTPException, Request
-from app.limiter import limiter
+
 from app.config import settings
 from app.database import get_db
-from app.dependencies.auth import _verify_session_with_clerk, get_current_user
-from app.models.catalogo import Usuario
+from app.dependencies import get_current_user
+from app.dependencies.auth import _verify_session_with_clerk
+from app.exceptions import MajesaError
+from app.limiter import limiter
+from app.models.catalogo import Rol, Usuario
 from app.schemas.catalogo_schema import UsuarioOut
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -82,11 +85,22 @@ async def register(
     if correo is None:
         raise HTTPException(status_code=400, detail="El perfil de Clerk no tiene correo registrado")
 
+    count_result = await db.execute(select(func.count()).select_from(Usuario))
+    es_primer_usuario = count_result.scalar() == 0
+
+    id_rol: int | None = None
+    if es_primer_usuario:
+        rol_result = await db.execute(select(Rol).where(Rol.nombre == "administrador"))
+        rol_obj = rol_result.scalar_one_or_none()
+        if not rol_obj:
+            raise MajesaError("Rol 'administrador' no encontrado en el sistema", 500)
+        id_rol = rol_obj.id_rol
+
     new_user = Usuario(
         clerk_id=clerk_user_id,
         nombre=nombre,
         correo=correo,
-        id_rol=None,  # El administrador asigna el rol manualmente
+        id_rol=id_rol,
         activo=True,
     )
     db.add(new_user)

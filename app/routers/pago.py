@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies.roles import require_rol
+from app.dependencies import require_rol
 from app.models.catalogo import Usuario
 from app.schemas.pago_schema import PagoDetalleResponse, PagoResponse, ValidarPagoRequest
 from app.services import pago_service
