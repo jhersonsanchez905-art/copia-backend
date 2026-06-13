@@ -26,7 +26,11 @@ def _build_engine():
         url = re.sub(r"[?&]sslmode=require", "", url).rstrip("?")
         connect_args["ssl"] = _ssl.create_default_context()
 
-    return create_async_engine(url, echo=True, connect_args=connect_args)
+    return create_async_engine(
+    url,
+    echo=settings.ENVIRONMENT == "development",
+    connect_args=connect_args
+)
 
 
 engine = _build_engine()
