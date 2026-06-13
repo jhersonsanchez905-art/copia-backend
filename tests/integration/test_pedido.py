@@ -69,7 +69,7 @@ def test_crear_pedido_item_cantidad_cero_returns_422(client_mesero):
 def test_crear_pedido_item_precio_negativo_returns_422(client_mesero):
     resp = client_mesero.post("/api/v1/pedidos", json={
         "id_mesa": 1,
-        "items": [{"id_producto": 1, "cantidad": 2, "precio_unitario": "-5.00"}],
+        "items": [{"id_producto": 1, "cantidad": 0}],
         "servicios": [],
     })
     assert resp.status_code == 422

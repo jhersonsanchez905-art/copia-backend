@@ -23,11 +23,11 @@ Issue: BI-001
 
 import logging
 from datetime import date, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import httpx
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from zoneinfo import ZoneInfo
 
 from app.config import settings
 
