@@ -19,10 +19,9 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-
-from sqlalchemy.exc import IntegrityError
 
 from app.exceptions import InsumoInsuficienteError, MajesaError, VentaNoEncontradaError
 from app.models.insumo import Subreceta

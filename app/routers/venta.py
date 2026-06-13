@@ -7,12 +7,12 @@ Issue: #16
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import Request
-from app.limiter import limiter
+
 from app.database import get_db
 from app.dependencies import get_current_user, require_rol
+from app.limiter import limiter
 from app.models.catalogo import Usuario
 from app.schemas.venta_schema import VentaCreateRequest, VentaResponse
 from app.services import venta_service

@@ -7,12 +7,14 @@ Only database queries here, no business logic.
 Author: Suley Suarez
 Issue: #16
 """
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 from datetime import date
 from typing import Optional
-from app.models.venta import Venta, ItemVenta, Pago, Factura
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.models.venta import Factura, ItemVenta, Pago, Venta
 
 
 async def create_venta(venta: Venta, db: AsyncSession) -> Venta:
