@@ -41,6 +41,7 @@ class UsuarioUpdate(BaseModel):
 class UsuarioOut(UsuarioBase):
     id_usuario: int
     fecha_creacion: Optional[datetime] = None
+    rol: Optional[RolOut] = None
     class Config:
         from_attributes = True
 
