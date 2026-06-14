@@ -66,11 +66,11 @@ async def obtener_usuario(id_usuario: int, db: AsyncSession = Depends(get_db), c
 
 @router.post("/usuarios", response_model=UsuarioOut, status_code=201)
 async def crear_usuario(data: UsuarioCreate, db: AsyncSession = Depends(get_db), current_user: Usuario = Depends(require_rol("administrador"))):
-    return await UsuarioService(db).crear(data)
+    return await UsuarioService(db).crear(data, current_user)
 
 @router.put("/usuarios/{id_usuario}", response_model=UsuarioOut)
 async def actualizar_usuario(id_usuario: int, data: UsuarioUpdate, db: AsyncSession = Depends(get_db), current_user: Usuario = Depends(require_rol("administrador"))):
-    obj = await UsuarioService(db).actualizar(id_usuario, data)
+    obj = await UsuarioService(db).actualizar(id_usuario, data, current_user)
     if not obj:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     return obj
@@ -79,7 +79,7 @@ async def actualizar_usuario(id_usuario: int, data: UsuarioUpdate, db: AsyncSess
 async def eliminar_usuario(id_usuario: int, db: AsyncSession = Depends(get_db), current_user: Usuario = Depends(require_rol("administrador"))):
     if id_usuario == current_user.id_usuario:
         raise HTTPException(status_code=400, detail="No puedes desactivar tu propia cuenta")
-    if not await UsuarioService(db).eliminar(id_usuario):
+    if not await UsuarioService(db).eliminar(id_usuario, current_user):
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
 # --- Clientes ---

@@ -41,6 +41,11 @@ def admin_user():
 
 
 @pytest.fixture
+def super_admin_user():
+    return _make_user("super_admin", id_usuario=2)
+
+
+@pytest.fixture
 def cajero_user():
     return _make_user("cajero")
 
@@ -66,6 +71,13 @@ def _setup_client(user: Usuario, db: AsyncMock) -> TestClient:
 @pytest.fixture
 def client_admin(admin_user, db_mock):
     client = _setup_client(admin_user, db_mock)
+    yield client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def client_super_admin(super_admin_user, db_mock):
+    client = _setup_client(super_admin_user, db_mock)
     yield client
     app.dependency_overrides.clear()
 
