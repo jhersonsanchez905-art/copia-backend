@@ -22,6 +22,7 @@ from app.models.catalogo import (
 
 async def seed_roles(session) -> None:
     roles = [
+        {"nombre": "super_admin",   "descripcion": "Acceso total al sistema, incluida la gestión de administradores"},
         {"nombre": "administrador", "descripcion": "Acceso total al sistema"},
         {"nombre": "cajero",        "descripcion": "Opera la caja y registra ventas"},
         {"nombre": "mesero",        "descripcion": "Toma pedidos y gestiona mesas"},

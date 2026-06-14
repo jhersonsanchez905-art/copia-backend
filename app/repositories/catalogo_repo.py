@@ -6,6 +6,7 @@ Issue: #38
 """
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 from app.models.catalogo import Rol, Usuario, Cliente, Marca, UnidadMedida, Clasificacion, Categoria, MetodoPago
 
 
@@ -42,21 +43,23 @@ class UsuarioRepository:
         self.db = db
 
     async def get_all(self, solo_activos: bool = False):
-        query = select(Usuario)
+        query = select(Usuario).options(joinedload(Usuario.rol))
         if solo_activos:
             query = query.where(Usuario.activo.is_(True))
         result = await self.db.execute(query)
-        return result.scalars().all()
+        return result.unique().scalars().all()
 
     async def get_by_id(self, id_usuario: int):
-        result = await self.db.execute(select(Usuario).where(Usuario.id_usuario == id_usuario))
-        return result.scalar_one_or_none()
+        result = await self.db.execute(
+            select(Usuario).options(joinedload(Usuario.rol)).where(Usuario.id_usuario == id_usuario)
+        )
+        return result.unique().scalar_one_or_none()
 
     async def create(self, data):
         obj = Usuario(**data.model_dump())
         self.db.add(obj)
         await self.db.commit()
-        await self.db.refresh(obj)
+        await self.db.refresh(obj, attribute_names=["rol"])
         return obj
 
     async def update(self, id_usuario: int, data):
@@ -66,7 +69,7 @@ class UsuarioRepository:
         for key, value in data.model_dump(exclude_unset=True).items():
             setattr(obj, key, value)
         await self.db.commit()
-        await self.db.refresh(obj)
+        await self.db.refresh(obj, attribute_names=["rol"])
         return obj
 
     async def delete(self, id_usuario: int):

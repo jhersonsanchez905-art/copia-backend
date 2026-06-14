@@ -153,6 +153,20 @@ def test_mesero_cannot_crear_receta(client_mesero):
     assert resp.status_code == 403
 
 
+# ── super_admin tiene acceso total (bypassa require_rol) ──────────────────────
+
+def test_super_admin_can_reach_cajero_only_endpoint(client_super_admin):
+    resp = client_super_admin.post("/api/v1/ventas", json={
+        "turno": "manana",
+        "id_apertura": 1,
+        "id_pedido": None,
+        "id_cliente": None,
+        "productos": [],
+        "pagos": [],
+    })
+    assert resp.status_code != 403
+
+
 # ── PATCH /pedidos/{id}/estado — cajero, mesero y administrador ───────────────
 
 def test_cajero_can_reach_cambiar_estado_pedido(client_cajero):
