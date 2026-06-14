@@ -38,7 +38,13 @@ class ValidarPagoRequest(BaseModel):
 
 # ── Responses ─────────────────────────────────────────────────────────────────
 
-class PagoResponse(BaseModel):
+class PagoBase(BaseModel):
+    """Common fields shared by every Pago response shape.
+
+    `venta_schema.PagoResponse` extends this with `metodo_pago` for the
+    /ventas endpoints; the bare version here is used by /pagos endpoints
+    where the `metodo_pago` relation isn't guaranteed to be loaded.
+    """
     model_config = ConfigDict(from_attributes=True)
 
     id_pago: int
@@ -47,6 +53,10 @@ class PagoResponse(BaseModel):
     monto: Decimal
     url_comprobante: Optional[str] = None
     estado_validacion: EstadoValidacionEnum
+
+
+class PagoResponse(PagoBase):
+    pass
 
 
 class PagoDetalleResponse(PagoResponse):

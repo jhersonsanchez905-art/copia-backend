@@ -98,9 +98,8 @@ async def seed_metodos_pago(session) -> None:
         {"nombre": "Efectivo",       "requiere_comprobante": False, "activo": True},
         {"nombre": "Tarjeta débito", "requiere_comprobante": True,  "activo": True},
         {"nombre": "Tarjeta crédito","requiere_comprobante": True,  "activo": True},
-        {"nombre": "Nequi",          "requiere_comprobante": True,  "activo": True},
-        {"nombre": "Daviplata",      "requiere_comprobante": True,  "activo": True},
         {"nombre": "Transferencia",  "requiere_comprobante": True,  "activo": True},
+        {"nombre": "Crédito empleado", "requiere_comprobante": False, "activo": True},
     ]
     for data in metodos:
         existe = await session.execute(select(MetodoPago).where(MetodoPago.nombre == data["nombre"]))

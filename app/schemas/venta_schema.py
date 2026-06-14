@@ -9,6 +9,8 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
+from app.schemas.pago_schema import PagoBase
+
 
 class TurnoEnum(str, Enum):
     manana = "manana"
@@ -19,12 +21,6 @@ class EstadoVentaEnum(str, Enum):
     abierta = "abierta"
     completada = "completada"
     anulada = "anulada"
-
-
-class EstadoValidacionEnum(str, Enum):
-    pendiente = "pendiente"
-    aprobado = "aprobado"
-    rechazado = "rechazado"
 
 
 # ── ItemVenta ─────────────────────────────────────────────────────────────────
@@ -65,22 +61,8 @@ class PagoRequest(BaseModel):
     url_comprobante: Optional[str] = None
 
 
-class PagoResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id_pago: int
-    id_venta: int
-    id_metodo_pago: int
-    monto: Decimal
-    url_comprobante: Optional[str] = None
-    estado_validacion: EstadoValidacionEnum
+class PagoResponse(PagoBase):
     metodo_pago: MetodoPagoResponse
-
-
-class PagoDetalleResponse(PagoResponse):
-    """Respuesta extendida con campos de validación."""
-    fecha_validacion: Optional[datetime] = None
-    id_usuario_validacion: Optional[int] = None
 
 
 # ── Factura ───────────────────────────────────────────────────────────────────
