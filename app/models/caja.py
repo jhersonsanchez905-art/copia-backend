@@ -108,6 +108,11 @@ class CierreCaja(Base):
         cascade="all, delete-orphan",
     )
 
+    @property
+    def monto_inicial(self):
+        """Fondo de caja con el que se abrió el turno (de la apertura asociada)."""
+        return self.apertura.monto_inicial if self.apertura else None
+
 
 class CierreCajaDetalle(Base):
     __tablename__ = "cierre_caja_detalle"

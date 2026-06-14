@@ -38,6 +38,7 @@ def _cierre_options():
     return [
         selectinload(CierreCaja.detalle),
         selectinload(CierreCaja.arqueo_efectivo).selectinload(CierreCajaArqueo.denominacion),
+        selectinload(CierreCaja.apertura),
     ]
 
 

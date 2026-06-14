@@ -159,6 +159,7 @@ class CierreCajaResponse(BaseModel):
     id_usuario:          int
     turno:               str
     fecha:               date
+    monto_inicial:       Decimal
     total_general:       Decimal
     total_transacciones: Decimal
     diferencia:          Decimal
