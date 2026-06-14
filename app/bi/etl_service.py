@@ -165,6 +165,9 @@ async def _paso2_kpi_venta_hora_dia(
     venta.fecha is stored in UTC. Hours are extracted after converting
     to America/Bogota (UTC-5, no DST).
 
+    num_ventas = COUNT(DISTINCT id_venta) — pedidos distintos en la hora,
+    usado para promedio_venta_pedido (§2.4.2).
+
     Args:
         db: Async database session.
         fecha: Business day being processed (Colombia local).
@@ -173,13 +176,14 @@ async def _paso2_kpi_venta_hora_dia(
     """
     sql = text("""
         INSERT INTO bi.kpi_venta_hora_dia
-            (fecha, hora, dia_semana, unidades, ingreso)
+            (fecha, hora, dia_semana, unidades, ingreso, num_ventas)
         SELECT
             :fecha,
             EXTRACT(HOUR FROM v.fecha AT TIME ZONE 'America/Bogota')::smallint,
             EXTRACT(DOW FROM :fecha::date)::smallint,
             SUM(iv.cantidad),
-            SUM(iv.precio_unitario * iv.cantidad)
+            SUM(iv.precio_unitario * iv.cantidad),
+            COUNT(DISTINCT v.id_venta)
         FROM pos.venta v
         JOIN pos.item_venta iv ON iv.id_venta = v.id_venta
         WHERE v.fecha >= :v_ini
@@ -189,7 +193,8 @@ async def _paso2_kpi_venta_hora_dia(
         ON CONFLICT (fecha, hora) DO UPDATE SET
             dia_semana = EXCLUDED.dia_semana,
             unidades   = EXCLUDED.unidades,
-            ingreso    = EXCLUDED.ingreso
+            ingreso    = EXCLUDED.ingreso,
+            num_ventas = EXCLUDED.num_ventas
     """)
     await db.execute(sql, {"fecha": fecha, "v_ini": v_ini, "v_fin": v_fin})
 
@@ -202,11 +207,17 @@ async def _paso3_kpi_insumo_dia(
 ) -> None:
     """Upsert daily ingredient snapshot with stock and consumption.
 
-    Key decisions:
+    Key decisions (corrected 2026-06-14, see C1/C2 in bi-logic review):
     - stock_actual: from pos.stock (1:1 with insumo, UNIQUE constraint).
-    - precio_real: precio * 100 / pct_rendimiento (pct is 0-100 scale).
-    - consumo_neto: SUM of movimiento_inventario where tipo = 'salida' (NET).
-    - consumo_bruto: consumo_neto * 100 / pct_rendimiento.
+    - pct_rendimiento: stored as FRACTION (0-1), normalized from pos.insumo's
+      0-100 scale. All downstream bi.* tables consume the fraction.
+    - precio_real: precio / (pct_rendimiento_fraccion), guard pct > 0.
+    - consumo_neto: SUM where tipo='salida' AND id_venta IS NOT NULL
+      (consumption tied to actual sales — C2 separator).
+    - merma_registrada: SUM where tipo='merma' ONLY (C2 fix — excludes
+      negative inventory adjustments, which are tipo='salida' with
+      id_venta IS NULL but are NOT spoilage).
+    - consumo_bruto: consumo_neto / pct_rendimiento_fraccion (theoretical).
     - Only active ingredients (insumo.activo = TRUE).
 
     Args:
@@ -220,7 +231,7 @@ async def _paso3_kpi_insumo_dia(
             (fecha, id_insumo, nombre_insumo, stock_actual,
              stock_minimo, stock_maximo, dias_anticipacion,
              pct_rendimiento, precio, precio_real,
-             consumo_neto, consumo_bruto)
+             consumo_neto, consumo_bruto, merma_registrada)
         SELECT
             :fecha,
             i.id_insumo,
@@ -229,27 +240,38 @@ async def _paso3_kpi_insumo_dia(
             i.stock_minimo,
             i.stock_maximo,
             i.dias_anticipacion,
-            i.pct_rendimiento,
+            CASE
+                WHEN i.pct_rendimiento > 0
+                THEN i.pct_rendimiento / 100.0
+                ELSE 0
+            END,
             i.precio,
             CASE
                 WHEN i.pct_rendimiento > 0
-                THEN i.precio * 100.0 / i.pct_rendimiento
+                THEN i.precio / (i.pct_rendimiento / 100.0)
                 ELSE NULL
             END,
-            COALESCE(m.consumo, 0),
+            COALESCE(m.consumo_neto, 0),
             CASE
                 WHEN i.pct_rendimiento > 0
-                THEN COALESCE(m.consumo, 0) * 100.0 / i.pct_rendimiento
-                ELSE COALESCE(m.consumo, 0)
-            END
+                THEN COALESCE(m.consumo_neto, 0) / (i.pct_rendimiento / 100.0)
+                ELSE COALESCE(m.consumo_neto, 0)
+            END,
+            COALESCE(m.merma_registrada, 0)
         FROM pos.insumo i
         LEFT JOIN pos.stock st ON st.id_insumo = i.id_insumo
         LEFT JOIN (
-            SELECT id_insumo, SUM(cantidad) AS consumo
+            SELECT
+                id_insumo,
+                SUM(cantidad) FILTER (
+                    WHERE tipo = 'salida' AND id_venta IS NOT NULL
+                ) AS consumo_neto,
+                SUM(cantidad) FILTER (
+                    WHERE tipo = 'merma'
+                ) AS merma_registrada
             FROM pos.movimiento_inventario
             WHERE fecha >= :v_ini
               AND fecha <  :v_fin
-              AND tipo = 'salida'
             GROUP BY id_insumo
         ) m ON m.id_insumo = i.id_insumo
         WHERE i.activo = TRUE
@@ -263,7 +285,8 @@ async def _paso3_kpi_insumo_dia(
             precio            = EXCLUDED.precio,
             precio_real       = EXCLUDED.precio_real,
             consumo_neto      = EXCLUDED.consumo_neto,
-            consumo_bruto     = EXCLUDED.consumo_bruto
+            consumo_bruto     = EXCLUDED.consumo_bruto,
+            merma_registrada  = EXCLUDED.merma_registrada
     """)
     await db.execute(sql, {"fecha": fecha, "v_ini": v_ini, "v_fin": v_fin})
 
