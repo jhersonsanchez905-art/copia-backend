@@ -7,7 +7,7 @@ import httpx
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -24,9 +24,14 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 _security = HTTPBearer(auto_error=False)
 
+# Clave arbitraria para el advisory lock que serializa la asignación del
+# rol "administrador" al primer usuario registrado.
+_FIRST_USER_LOCK_KEY = 72700001
+
 
 @router.get("/me", response_model=UsuarioOut, summary="Usuario autenticado actual")
-async def me(current_user: Usuario = Depends(get_authenticated_user)):
+@limiter.limit("30/minute")
+async def me(request: Request, current_user: Usuario = Depends(get_authenticated_user)):
     return current_user
 
 @router.post("/register", response_model=UsuarioOut, summary="Registrar usuario desde Clerk")
@@ -84,6 +89,11 @@ async def register(
     )
     if correo is None:
         raise HTTPException(status_code=400, detail="El perfil de Clerk no tiene correo registrado")
+
+    # Serializa el chequeo de "primer usuario" para que dos registros
+    # concurrentes no obtengan ambos el rol "administrador". El lock se
+    # libera automáticamente al hacer commit/rollback de la transacción.
+    await db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": _FIRST_USER_LOCK_KEY})
 
     count_result = await db.execute(select(func.count()).select_from(Usuario))
     es_primer_usuario = count_result.scalar() == 0

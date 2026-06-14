@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     CLERK_SECRET_KEY: str
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: str = "not-configured"
+    # Frontend API URL de Clerk usado para validar el claim 'iss' del JWT.
+    # Si no se define, se deriva de NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY.
+    CLERK_ISSUER: str = "not-configured"
     RESEND_API_KEY: str = "not-configured"
     CLOUDINARY_URL: str = "not-configured"
     CRON_SECRET: str = "not-configured"

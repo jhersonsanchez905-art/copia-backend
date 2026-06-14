@@ -1,0 +1,689 @@
+{
+  "info": {
+    "name": "Majesa Backend - Auth, Catálogos y Productos",
+    "description": "Colección para validar el flujo de autenticación con Clerk y la creación/gestión de catálogos y productos.\n\nUso:\n1. Configura `base_url` (local: http://localhost:8000/api/v1, prod: https://majesa.onrender.com/api/v1).\n2. Obtén un token de sesión de Clerk (`await window.Clerk.session.getToken()` en la consola del frontend logueado) y pégalo en la variable `token`. Los tokens de Clerk expiran rápido (~60s), así que renuévalo justo antes de probar.\n3. Llama primero `Auth > Registrar usuario` para crear/sincronizar tu usuario en `pos.usuario`.\n4. Los endpoints de creación/edición/borrado requieren rol `administrador`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://majesa.onrender.com/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Registrar usuario (desde Clerk)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "register"]
+            },
+            "description": "Crea (o devuelve si ya existe) el usuario en pos.usuario usando los datos del perfil de Clerk asociado al token. El primer usuario registrado en el sistema recibe automáticamente el rol 'administrador'."
+          },
+          "response": []
+        },
+        {
+          "name": "Usuario autenticado actual",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/me",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "Devuelve el usuario autenticado, incluyendo su rol (`rol: null` si está pendiente de activación)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Catálogos",
+      "item": [
+        {
+          "name": "Roles",
+          "item": [
+            {
+              "name": "Listar roles",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/roles",
+                  "host": ["{{base_url}}"],
+                  "path": ["roles"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Obtener rol por ID",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/roles/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["roles", "1"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Crear rol",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"mesero\",\n  \"descripcion\": \"Atiende mesas y toma pedidos\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/roles",
+                  "host": ["{{base_url}}"],
+                  "path": ["roles"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Eliminar rol",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/roles/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["roles", "1"]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Usuarios",
+          "item": [
+            {
+              "name": "Listar usuarios",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/usuarios?solo_activos=true",
+                  "host": ["{{base_url}}"],
+                  "path": ["usuarios"],
+                  "query": [
+                    {
+                      "key": "solo_activos",
+                      "value": "true"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Obtener usuario por ID",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/usuarios/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["usuarios", "1"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Crear usuario",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"clerk_id\": \"user_123456\",\n  \"nombre\": \"Juan Pérez\",\n  \"correo\": \"juan@majesa.com\",\n  \"id_rol\": 2,\n  \"activo\": true\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/usuarios",
+                  "host": ["{{base_url}}"],
+                  "path": ["usuarios"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Actualizar usuario",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"Juan Pérez Gómez\",\n  \"id_rol\": 2,\n  \"activo\": true\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/usuarios/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["usuarios", "1"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Eliminar usuario",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/usuarios/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["usuarios", "1"]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Clientes",
+          "item": [
+            {
+              "name": "Listar clientes",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/clientes",
+                  "host": ["{{base_url}}"],
+                  "path": ["clientes"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Obtener cliente por ID",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/clientes/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["clientes", "1"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Crear cliente",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"María\",\n  \"apellido\": \"López\",\n  \"telefono\": \"3001234567\",\n  \"correo\": \"maria.lopez@example.com\",\n  \"direccion\": \"Calle 10 #20-30\",\n  \"numero_documento\": \"1020304050\",\n  \"activo\": true,\n  \"observaciones\": \"Cliente frecuente\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/clientes",
+                  "host": ["{{base_url}}"],
+                  "path": ["clientes"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Actualizar cliente",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"María\",\n  \"apellido\": \"López Restrepo\",\n  \"telefono\": \"3009998888\",\n  \"activo\": true\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/clientes/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["clientes", "1"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Eliminar cliente",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/clientes/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["clientes", "1"]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Marcas",
+          "item": [
+            {
+              "name": "Listar marcas",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/marcas",
+                  "host": ["{{base_url}}"],
+                  "path": ["marcas"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Crear marca",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"Nestlé\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/marcas",
+                  "host": ["{{base_url}}"],
+                  "path": ["marcas"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Eliminar marca",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/marcas/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["marcas", "1"]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Unidades de Medida",
+          "item": [
+            {
+              "name": "Listar unidades de medida",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/unidades-medida",
+                  "host": ["{{base_url}}"],
+                  "path": ["unidades-medida"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Crear unidad de medida",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"Kilogramo\",\n  \"abreviatura\": \"kg\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/unidades-medida",
+                  "host": ["{{base_url}}"],
+                  "path": ["unidades-medida"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Eliminar unidad de medida",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/unidades-medida/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["unidades-medida", "1"]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Clasificaciones",
+          "item": [
+            {
+              "name": "Listar clasificaciones",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/clasificaciones",
+                  "host": ["{{base_url}}"],
+                  "path": ["clasificaciones"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Crear clasificación",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"Bebida caliente\",\n  \"descripcion\": \"Productos servidos calientes\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/clasificaciones",
+                  "host": ["{{base_url}}"],
+                  "path": ["clasificaciones"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Eliminar clasificación",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/clasificaciones/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["clasificaciones", "1"]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Categorías",
+          "item": [
+            {
+              "name": "Listar categorías",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/categorias",
+                  "host": ["{{base_url}}"],
+                  "path": ["categorias"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Crear categoría",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"Cafés\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/categorias",
+                  "host": ["{{base_url}}"],
+                  "path": ["categorias"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Eliminar categoría",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/categorias/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["categorias", "1"]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Métodos de Pago",
+          "item": [
+            {
+              "name": "Listar métodos de pago",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/metodos-pago",
+                  "host": ["{{base_url}}"],
+                  "path": ["metodos-pago"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Crear método de pago",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"nombre\": \"Tarjeta de crédito\",\n  \"requiere_comprobante\": true,\n  \"activo\": true\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/metodos-pago",
+                  "host": ["{{base_url}}"],
+                  "path": ["metodos-pago"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Eliminar método de pago",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/metodos-pago/1",
+                  "host": ["{{base_url}}"],
+                  "path": ["metodos-pago", "1"]
+                }
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Productos",
+      "item": [
+        {
+          "name": "Listar productos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/productos?solo_activos=true&skip=0&limit=50",
+              "host": ["{{base_url}}"],
+              "path": ["productos"],
+              "query": [
+                {
+                  "key": "solo_activos",
+                  "value": "true"
+                },
+                {
+                  "key": "id_categoria",
+                  "value": "1",
+                  "disabled": true
+                },
+                {
+                  "key": "skip",
+                  "value": "0"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Obtener producto por ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/productos/1",
+              "host": ["{{base_url}}"],
+              "path": ["productos", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Crear producto",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Espresso Doble\",\n  \"id_categoria\": 2,\n  \"precio\": 6500,\n  \"num_porciones\": 1,\n  \"url_foto\": \"https://cafe-majesa.com/espresso.jpg\",\n  \"pct_prima_real\": 15.5,\n  \"activo\": true,\n  \"fecha_lanzamiento\": \"2024-06-01\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/productos",
+              "host": ["{{base_url}}"],
+              "path": ["productos"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Actualizar producto (parcial)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"precio\": 7000,\n  \"activo\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/productos/1",
+              "host": ["{{base_url}}"],
+              "path": ["productos", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Eliminar producto",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/productos/1",
+              "host": ["{{base_url}}"],
+              "path": ["productos", "1"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
