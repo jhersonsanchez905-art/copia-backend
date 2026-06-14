@@ -47,6 +47,11 @@ class Venta(Base):
     movimientos = relationship("MovimientoInventario", back_populates="venta")
     devoluciones = relationship("Devolucion", back_populates="venta")
 
+    @property
+    def mesa(self):
+        """Mesa del pedido asociado a esta venta, si la venta vino de un pedido."""
+        return self.pedido.mesa if self.pedido else None
+
     def __repr__(self):
         return f"<Venta id={self.id_venta} estado={self.estado}>"
 

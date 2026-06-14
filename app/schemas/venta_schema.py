@@ -7,9 +7,8 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.schemas.pago_schema import PagoBase
 
 
 class TurnoEnum(str, Enum):
@@ -21,6 +20,12 @@ class EstadoVentaEnum(str, Enum):
     abierta = "abierta"
     completada = "completada"
     anulada = "anulada"
+
+
+class EstadoValidacionEnum(str, Enum):
+    pendiente = "pendiente"
+    aprobado = "aprobado"
+    rechazado = "rechazado"
 
 
 # ── ItemVenta ─────────────────────────────────────────────────────────────────
@@ -61,8 +66,36 @@ class PagoRequest(BaseModel):
     url_comprobante: Optional[str] = None
 
 
-class PagoResponse(PagoBase):
-    metodo_pago: MetodoPagoResponse
+class PagoResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id_pago: int
+    id_venta: int
+    id_metodo_pago: int
+    monto: Decimal
+    url_comprobante: Optional[str] = None
+    estado_validacion: EstadoValidacionEnum
+
+
+class ValidarPagoRequest(BaseModel):
+    estado_validacion: EstadoValidacionEnum
+    id_usuario_validacion: int
+
+
+class PagoDetalleResponse(PagoResponse):
+    """Respuesta extendida con campos de validación."""
+    fecha_validacion: Optional[datetime] = None
+    id_usuario_validacion: Optional[int] = None
+
+
+# ── Mesa ──────────────────────────────────────────────────────────────────────
+
+class MesaVentaResponse(BaseModel):
+    """Datos mínimos de la mesa del pedido asociado a la venta (si aplica)."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_mesa: int
+    numero: str
 
 
 # ── Factura ───────────────────────────────────────────────────────────────────
@@ -169,10 +202,9 @@ class VentaResponse(BaseModel):
     items: list[ItemVentaResponse] = []
     pagos: list[PagoResponse] = []
     factura: Optional[FacturaResponse] = None
+    mesa: Optional[MesaVentaResponse] = None
 
-    @computed_field  # type: ignore[misc]
     @property
     def cambio(self) -> Decimal:
-        """Amount returned to the customer when total paid exceeds the sale subtotal."""
-        diff = self.total - self.subtotal
-        return diff if diff > Decimal("0") else Decimal("0")
+        diferencia = self.total - self.subtotal
+        return diferencia if diferencia > 0 else Decimal("0")

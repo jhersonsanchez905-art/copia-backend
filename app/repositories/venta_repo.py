@@ -14,7 +14,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.venta import Factura, ItemVenta, Pago, Venta
+from app.models.pedido import Pedido
+from app.models.venta import Venta, ItemVenta, Pago, Factura
 
 
 async def create_venta(venta: Venta, db: AsyncSession) -> Venta:
@@ -31,8 +32,9 @@ async def get_venta_by_id(id_venta: int, db: AsyncSession) -> Optional[Venta]:
         select(Venta)
         .options(
             selectinload(Venta.items),
-            selectinload(Venta.pagos).selectinload(Pago.metodo_pago),
+            selectinload(Venta.pagos),
             selectinload(Venta.factura),
+            selectinload(Venta.pedido).selectinload(Pedido.mesa),
         )
         .where(Venta.id_venta == id_venta)
     )
