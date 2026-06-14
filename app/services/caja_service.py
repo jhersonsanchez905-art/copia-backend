@@ -184,7 +184,8 @@ async def cerrar_caja(
     total_contado = total_efectivo_arqueo + sum(
         (d.total_contado for d in data.detalle), Decimal(0)
     )
-    diferencia_general = total_contado - total_transacciones
+    # El efectivo esperado en caja incluye el fondo con el que se abrió el turno
+    diferencia_general = total_contado - (total_transacciones + apertura.monto_inicial)
 
     cierre = CierreCaja(
         id_apertura=apertura.id_apertura,
@@ -199,9 +200,11 @@ async def cerrar_caja(
     )
     cierre = await caja_repo.create_cierre(cierre, db)
 
-    # Auto-create the cash detalle row from arqueo sum
-    total_esperado_efectivo = totales_por_metodo.get(
-        metodo_efectivo.id_metodo_pago, Decimal(0)
+    # Auto-create the cash detalle row from arqueo sum.
+    # El efectivo esperado incluye el fondo inicial con el que se abrió el turno.
+    total_esperado_efectivo = (
+        totales_por_metodo.get(metodo_efectivo.id_metodo_pago, Decimal(0))
+        + apertura.monto_inicial
     )
     await caja_repo.create_cierre_detalle(
         CierreCajaDetalle(
