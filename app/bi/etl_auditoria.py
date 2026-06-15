@@ -165,3 +165,52 @@ async def paso(db: AsyncSession, id_ejecucion: int, step: Step) -> AsyncIterator
                 "duracion_ms": duracion_ms,
             },
         )
+
+
+async def cerrar_ejecucion(db: AsyncSession, id_ejecucion: int, status: Status) -> None:
+    """Mark a bi.etl_ejecucion row as finished.
+
+    Args:
+        db: Async database session (transaction managed by caller).
+        id_ejecucion: The bi.etl_ejecucion id from iniciar_ejecucion.
+        status: Final status (typically Status.EXITOSO).
+    """
+    await db.execute(
+        text("""
+            UPDATE bi.etl_ejecucion
+            SET id_status = :status, fin = now()
+            WHERE id_ejecucion = :id_ejecucion
+        """),
+        {"id_ejecucion": id_ejecucion, "status": status},
+    )
+
+
+async def registrar_fallo(db: AsyncSession, id_ejecucion: int, exc: Exception) -> None:
+    """Mark a bi.etl_ejecucion row as failed and log a final audit event.
+
+    Args:
+        db: Async database session (transaction managed by caller).
+        id_ejecucion: The bi.etl_ejecucion id from iniciar_ejecucion.
+        exc: The exception that caused the failure.
+    """
+    await db.execute(
+        text("""
+            UPDATE bi.etl_ejecucion
+            SET id_status = :status, fin = now()
+            WHERE id_ejecucion = :id_ejecucion
+        """),
+        {"id_ejecucion": id_ejecucion, "status": Status.FALLIDO_DEFINITIVO},
+    )
+    await db.execute(
+        text("""
+            INSERT INTO bi.audit_etl
+                (id_ejecucion, id_step, id_status, descripcion)
+            VALUES (:id_ejecucion, :step, :status, :descripcion)
+        """),
+        {
+            "id_ejecucion": id_ejecucion,
+            "step": Step.EJECUCION,
+            "status": Status.FALLIDO_DEFINITIVO,
+            "descripcion": str(exc)[:500],
+        },
+    )
