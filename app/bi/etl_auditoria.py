@@ -14,6 +14,9 @@ Issue: BI-001
 ╚══════════════════════════════════════════════════════════════╝
 """
 
+import time
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import date
 from enum import IntEnum
 
@@ -86,3 +89,79 @@ async def iniciar_ejecucion(db: AsyncSession, fecha: date, origen: str) -> int:
         },
     )
     return id_ejecucion
+
+
+@asynccontextmanager
+async def paso(db: AsyncSession, id_ejecucion: int, step: Step) -> AsyncIterator[dict]:
+    """Audit-log a single ETL step.
+
+    Records an 'iniciado' event on enter, and 'exitoso'/'fallido_*' on
+    exit, including elapsed time. The caller can write to the returned
+    dict's 'filas' key to report rows affected (e.g. from rowcount).
+
+    On exception, logs a 'fallido_reintentable' audit event and
+    re-raises — does not swallow errors (rollback is procesar_dia's job).
+
+    Args:
+        db: Async database session (transaction managed by caller).
+        id_ejecucion: The bi.etl_ejecucion id from iniciar_ejecucion.
+        step: Which ETL step is being audited.
+
+    Yields:
+        A dict with key 'filas' (int, default 0) for the caller to set.
+    """
+    inicio = time.monotonic()
+    info: dict = {"filas": 0}
+
+    await db.execute(
+        text("""
+            INSERT INTO bi.audit_etl
+                (id_ejecucion, id_step, id_status, descripcion)
+            VALUES (:id_ejecucion, :step, :status, NULL)
+        """),
+        {
+            "id_ejecucion": id_ejecucion,
+            "step": step,
+            "status": Status.INICIADO,
+        },
+    )
+
+    try:
+        yield info
+    except Exception as exc:
+        duracion_ms = int((time.monotonic() - inicio) * 1000)
+        await db.execute(
+            text("""
+                INSERT INTO bi.audit_etl
+                    (id_ejecucion, id_step, id_status,
+                     descripcion, duracion_ms)
+                VALUES (:id_ejecucion, :step, :status,
+                        :descripcion, :duracion_ms)
+            """),
+            {
+                "id_ejecucion": id_ejecucion,
+                "step": step,
+                "status": Status.FALLIDO_REINTENTABLE,
+                "descripcion": str(exc)[:500],
+                "duracion_ms": duracion_ms,
+            },
+        )
+        raise
+    else:
+        duracion_ms = int((time.monotonic() - inicio) * 1000)
+        await db.execute(
+            text("""
+                INSERT INTO bi.audit_etl
+                    (id_ejecucion, id_step, id_status,
+                     filas_afectadas, duracion_ms)
+                VALUES (:id_ejecucion, :step, :status,
+                        :filas, :duracion_ms)
+            """),
+            {
+                "id_ejecucion": id_ejecucion,
+                "step": step,
+                "status": Status.EXITOSO,
+                "filas": info["filas"],
+                "duracion_ms": duracion_ms,
+            },
+        )
