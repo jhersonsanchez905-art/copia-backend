@@ -182,3 +182,69 @@ async def calcular_top_productos(
         {"desde": desde, "hasta": hasta, "limite": limite},
     )
     return [dict(row) for row in result.mappings().all()]
+
+
+async def calcular_top_insumos(
+    db: AsyncSession, desde: date, hasta: date, limite: int = 5
+) -> list[dict]:
+    """Compute the resumen_diario_top_insumo shape for a date range.
+
+    For a single day (desde == hasta), this is D3's exact formula.
+    For a range, consumo_neto/merma are summed across all days,
+    and valor_consumo/merma_valor are recomputed from the summed
+    consumo_neto and the AVERAGE precio_real over the range (since
+    precio_real can fluctuate day to day).
+
+    Args:
+        db: Async database session.
+        desde: First day of the range (inclusive).
+        hasta: Last day of the range (inclusive).
+        limite: Max number of ingredients to return (5 for the
+            dashboard top, per §4.1).
+
+    Returns:
+        List of dicts with posicion, id_insumo, nombre, valor_consumo,
+        cantidad, unidad, merma_valor — ordered by posicion ascending.
+    """
+    result = await db.execute(
+        text("""
+        WITH agregado AS (
+            SELECT
+                k.id_insumo,
+                MAX(k.nombre_insumo) AS nombre,
+                SUM(k.consumo_neto)  AS consumo_neto,
+                SUM(k.merma_registrada) AS merma_registrada,
+                AVG(k.precio_real)   AS precio_real_prom,
+                MAX(um.nombre)       AS unidad
+            FROM bi.kpi_insumo_dia k
+            LEFT JOIN pos.insumo i
+                ON i.id_insumo = k.id_insumo
+            LEFT JOIN pos.unidad_medida um
+                ON um.id_unidad_medida = i.id_unidad_medida
+            WHERE k.fecha BETWEEN :desde AND :hasta
+            GROUP BY k.id_insumo
+        ),
+        ranked AS (
+            SELECT
+                id_insumo,
+                nombre,
+                consumo_neto * precio_real_prom AS valor_consumo,
+                consumo_neto AS cantidad,
+                COALESCE(unidad, '') AS unidad,
+                merma_registrada * precio_real_prom AS merma_valor,
+                ROW_NUMBER() OVER (
+                    ORDER BY consumo_neto * precio_real_prom DESC,
+                             consumo_neto DESC,
+                             id_insumo ASC
+                ) AS posicion
+            FROM agregado
+        )
+        SELECT posicion, id_insumo, nombre,
+               valor_consumo, cantidad, unidad, merma_valor
+        FROM ranked
+        WHERE posicion <= :limite
+        ORDER BY posicion
+    """),
+        {"desde": desde, "hasta": hasta, "limite": limite},
+    )
+    return [dict(row) for row in result.mappings().all()]
