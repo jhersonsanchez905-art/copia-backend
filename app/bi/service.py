@@ -18,7 +18,7 @@ from datetime import date, datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from zoneinfo import ZoneInfo
 
-from app.bi import etl_service, repo
+from app.bi import etl_service, queries, repo
 from app.bi.schemas import (
     DashboardDiarioSchema,
     DashboardMensualSchema,
@@ -216,4 +216,53 @@ async def procesar_dia(
         id_ejecucion=resultado["id_ejecucion"],
         fecha_procesada=fecha_a_procesar,
         status=resultado["status"],
+    )
+
+
+async def get_diario_puntual(db: AsyncSession, fecha: date) -> DashboardDiarioSchema:
+    """Compute the daily dashboard for a historical date (GET /bi/diario, §4.2).
+
+    Unlike get_dashboard_diario (which reads precomputed
+    bi.resumen_diario_*), this calculates on the fly from
+    bi.kpi_*_dia using the same formulas (queries.py), since
+    resumen_diario_* only holds yesterday's snapshot.
+
+    Always omits recomendacion_compra (§2.3 — purchase recommendations
+    don't apply to historical dates).
+
+    Args:
+        db: Async database session.
+        fecha: The historical date to analyze.
+
+    Returns:
+        DashboardDiarioSchema with recomendacion_compra=None.
+    """
+    ventas = await queries.calcular_ventas(db, fecha, fecha)
+    top_productos = await queries.calcular_top_productos(db, fecha, fecha)
+    top_insumos = await queries.calcular_top_insumos(db, fecha, fecha)
+    horas = await queries.calcular_horas(db, fecha, fecha)
+
+    return DashboardDiarioSchema(
+        fecha_analisis=fecha,
+        actualizado_a=datetime.now(tz=BOGOTA_TZ),
+        ventas=VentasDiariasSchema(
+            ingreso=ventas.get("ingreso", 0),
+            unidades=ventas.get("unidades", 0),
+            num_pedidos=ventas.get("num_pedidos", 0),
+            promedio_venta_pedido=ventas.get("promedio_venta_pedido"),
+            referencia=ReferenciaVentasSchema(
+                ingreso=ventas.get("ref_ingreso"),
+                unidades=ventas.get("ref_unidades"),
+                promedio_venta_pedido=ventas.get("ref_promedio_pedido"),
+            ),
+            variacion=VariacionVentasSchema(
+                ingreso_pct=ventas.get("var_ingreso_pct"),
+                promedio_venta_pedido_pct=ventas.get("var_promedio_pedido_pct"),
+            ),
+        ),
+        merma=MermaSchema(valor=ventas.get("merma_valor", 0)),
+        top_productos=[TopProductoSchema(**p) for p in top_productos],
+        top_insumos=[TopInsumoSchema(**i) for i in top_insumos],
+        ventas_por_hora=[VentaHoraSchema(**h) for h in horas],
+        recomendacion_compra=None,
     )
