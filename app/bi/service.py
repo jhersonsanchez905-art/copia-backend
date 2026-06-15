@@ -22,6 +22,7 @@ from zoneinfo import ZoneInfo
 from app.bi import etl_service, queries, repo
 from app.bi.schemas import (
     ComparacionDiariaSchema,
+    ComparacionMensualSchema,
     DashboardDiarioSchema,
     DashboardMensualSchema,
     EjecucionEtlSchema,
@@ -40,6 +41,7 @@ from app.bi.schemas import (
     TopProductoMesSchema,
     TopProductoSchema,
     VariacionRangoDiarioSchema,
+    VariacionRangoMensualSchema,
     VariacionVentasSchema,
     VentaHoraSchema,
     VentasDiariasSchema,
@@ -433,4 +435,46 @@ async def get_diario_rango(
         ventas_por_hora=[VentaHoraSchema(**h) for h in horas],
         recomendacion_compra=None,
         dias_incluidos=dias_incluidos,
+    )
+
+
+async def get_mensual_comparar(
+    db: AsyncSession, mes_a: date, mes_b: date
+) -> ComparacionMensualSchema | None:
+    """Compare two monthly dashboards (GET /bi/mensual/comparar, §4.2 caso A).
+
+    Reads two months' precomputed resumen_mensual_* rows and computes
+    the percentage variation of b relative to a.
+
+    Args:
+        db: Async database session.
+        mes_a: First month to compare (baseline), first day of month.
+        mes_b: Second month to compare, first day of month.
+
+    Returns:
+        ComparacionMensualSchema, or None if either month has no data.
+    """
+    dash_a = await get_mensual_puntual(db, mes_a)
+    dash_b = await get_mensual_puntual(db, mes_b)
+
+    if dash_a is None or dash_b is None:
+        return None
+
+    ingreso_a = sum((r.ingreso or 0) for r in dash_a.ranking_cantidad)
+    ingreso_b = sum((r.ingreso or 0) for r in dash_b.ranking_cantidad)
+    unidades_a = sum((r.unidades or 0) for r in dash_a.ranking_cantidad)
+    unidades_b = sum((r.unidades or 0) for r in dash_b.ranking_cantidad)
+
+    def _variacion(a: Decimal, b: Decimal) -> Decimal | None:
+        if a == 0:
+            return None
+        return (b - a) / a * 100
+
+    return ComparacionMensualSchema(
+        a=dash_a,
+        b=dash_b,
+        variacion=VariacionRangoMensualSchema(
+            ingreso_pct=_variacion(ingreso_a, ingreso_b),
+            unidades_pct=_variacion(unidades_a, unidades_b),
+        ),
     )
