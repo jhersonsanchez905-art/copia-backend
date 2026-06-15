@@ -14,12 +14,14 @@ Issue: BI-001
 """
 
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from zoneinfo import ZoneInfo
 
 from app.bi import etl_service, queries, repo
 from app.bi.schemas import (
+    ComparacionDiariaSchema,
     DashboardDiarioSchema,
     DashboardMensualSchema,
     EjecucionEtlSchema,
@@ -36,6 +38,7 @@ from app.bi.schemas import (
     TopInsumoSchema,
     TopProductoMesSchema,
     TopProductoSchema,
+    VariacionRangoDiarioSchema,
     VariacionVentasSchema,
     VentaHoraSchema,
     VentasDiariasSchema,
@@ -335,3 +338,44 @@ async def get_mensual_puntual(
         month was never processed.
     """
     return await get_dashboard_mensual(db, mes, incluir_mes_anterior=False)
+
+
+async def get_diario_comparar(
+    db: AsyncSession, fecha_a: date, fecha_b: date
+) -> ComparacionDiariaSchema | None:
+    """Compare two daily dashboards (GET /bi/diario/comparar, §4.2 caso A).
+
+    Runs get_diario_puntual twice and computes the percentage
+    variation of b relative to a.
+
+    Args:
+        db: Async database session.
+        fecha_a: First date to compare (baseline).
+        fecha_b: Second date to compare.
+
+    Returns:
+        ComparacionDiariaSchema, or None if either date has no data.
+    """
+    dash_a = await get_diario_puntual(db, fecha_a)
+    dash_b = await get_diario_puntual(db, fecha_b)
+
+    if dash_a is None or dash_b is None:
+        return None
+
+    def _variacion(a: Decimal | None, b: Decimal | None) -> Decimal | None:
+        if a is None or b is None or a == 0:
+            return None
+        return (b - a) / a * 100
+
+    return ComparacionDiariaSchema(
+        a=dash_a,
+        b=dash_b,
+        variacion=VariacionRangoDiarioSchema(
+            ingreso_pct=_variacion(dash_a.ventas.ingreso, dash_b.ventas.ingreso),
+            unidades_pct=_variacion(dash_a.ventas.unidades, dash_b.ventas.unidades),
+            promedio_venta_pedido_pct=_variacion(
+                dash_a.ventas.promedio_venta_pedido,
+                dash_b.ventas.promedio_venta_pedido,
+            ),
+        ),
+    )
