@@ -307,3 +307,28 @@ async def calcular_horas(db: AsyncSession, desde: date, hasta: date) -> list[dic
         {"desde": desde, "hasta": hasta},
     )
     return [dict(row) for row in result.mappings().all()]
+
+
+async def existe_datos_dia(db: AsyncSession, fecha: date) -> bool:
+    """Check if bi.kpi_producto_dia has at least one row for a given date.
+
+    Used to distinguish "no ETL data" from "zero sales" before
+    running the full calculation queries.
+
+    Args:
+        db: Async database session.
+        fecha: The date to check.
+
+    Returns:
+        True if at least one row exists, False otherwise.
+    """
+    result = await db.execute(
+        text("""
+            SELECT EXISTS(
+                SELECT 1 FROM bi.kpi_producto_dia
+                WHERE fecha = :fecha
+            )
+        """),
+        {"fecha": fecha},
+    )
+    return result.scalar()

@@ -22,9 +22,11 @@ from app.bi import etl_service, queries, repo
 from app.bi.schemas import (
     DashboardDiarioSchema,
     DashboardMensualSchema,
+    EjecucionEtlSchema,
     FugaInsumoSchema,
     GananciaBrutaSchema,
     MermaSchema,
+    MetaSchema,
     PicoHoraSchema,
     ProcesarDiaResponse,
     RankingCantidadSchema,
@@ -219,7 +221,9 @@ async def procesar_dia(
     )
 
 
-async def get_diario_puntual(db: AsyncSession, fecha: date) -> DashboardDiarioSchema:
+async def get_diario_puntual(
+    db: AsyncSession, fecha: date
+) -> DashboardDiarioSchema | None:
     """Compute the daily dashboard for a historical date (GET /bi/diario, §4.2).
 
     Unlike get_dashboard_diario (which reads precomputed
@@ -235,8 +239,13 @@ async def get_diario_puntual(db: AsyncSession, fecha: date) -> DashboardDiarioSc
         fecha: The historical date to analyze.
 
     Returns:
-        DashboardDiarioSchema with recomendacion_compra=None.
+        DashboardDiarioSchema with recomendacion_compra=None, or None
+        if no ETL data exists for this date (bi.kpi_producto_dia has
+        no rows for fecha).
     """
+    if not await queries.existe_datos_dia(db, fecha):
+        return None
+
     ventas = await queries.calcular_ventas(db, fecha, fecha)
     top_productos = await queries.calcular_top_productos(db, fecha, fecha)
     top_insumos = await queries.calcular_top_insumos(db, fecha, fecha)
@@ -266,3 +275,42 @@ async def get_diario_puntual(db: AsyncSession, fecha: date) -> DashboardDiarioSc
         ventas_por_hora=[VentaHoraSchema(**h) for h in horas],
         recomendacion_compra=None,
     )
+
+
+async def get_meta(db: AsyncSession) -> MetaSchema:
+    """Return the available date range for the front's selectors (GET /bi/meta).
+
+    historico_desde: earliest date with a successful ETL run.
+    ultimo_dia_procesado: most recent date with a successful ETL run.
+
+    Args:
+        db: Async database session.
+
+    Returns:
+        MetaSchema with historico_desde and ultimo_dia_procesado.
+    """
+    primera = await repo.get_primera_fecha_procesada(db)
+    ultima_ejecucion = await repo.get_ultima_ejecucion_exitosa(db)
+
+    return MetaSchema(
+        historico_desde=primera or date.today(),
+        ultimo_dia_procesado=(
+            ultima_ejecucion.fecha_procesada if ultima_ejecucion else date.today()
+        ),
+    )
+
+
+async def get_ejecuciones_etl(
+    db: AsyncSession, limit: int = 30
+) -> list[EjecucionEtlSchema]:
+    """Return recent ETL run history (GET /bi/admin/etl/ejecuciones, §4.4).
+
+    Args:
+        db: Async database session.
+        limit: Maximum number of rows to return (default 30).
+
+    Returns:
+        List of EjecucionEtlSchema, most recent first.
+    """
+    rows = await repo.get_ejecuciones_etl(db, limit)
+    return [EjecucionEtlSchema(**row) for row in rows]
