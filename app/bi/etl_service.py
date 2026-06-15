@@ -357,102 +357,373 @@ async def _paso4_kpi_consumo_insumo_producto(
     await db.execute(sql, {"fecha": fecha, "v_ini": v_ini, "v_fin": v_fin})
 
 
-async def _paso5_rebuild_resumenes(db: AsyncSession) -> None:
-    """Rebuild all 6 summary tables inside a single transaction.
+async def _paso5_rebuild_resumenes(
+    db: AsyncSession,
+    fecha: date,
+) -> None:
+    """Rebuild all summary tables (daily + monthly) in a transaction.
+
+    Daily summaries (5): full DELETE + INSERT — singleton snapshot of
+    ``fecha`` (no fecha in PK, rebuilt completely each night).
+
+    Monthly summaries (7): DELETE WHERE mes = :mes + INSERT — only the
+    current month is rewritten; closed months are immutable (§2.3).
 
     Uses DELETE + INSERT (not TRUNCATE) to stay within the transaction
     boundary. MVCC ensures readers never see empty tables.
 
     Args:
         db: Async database session (transaction managed by caller).
+        fecha: Business day being processed (Colombia local). Defines
+            both the daily snapshot and the month for monthly summaries.
     """
-    queries = [
-        # 1. ranking_producto — last 30 days
-        """
-        DELETE FROM bi.resumen_ranking_producto;
-        INSERT INTO bi.resumen_ranking_producto
-            (id_producto, nombre_producto, unidades, margen_total, margen_pct)
+    mes = fecha.replace(day=1)
+    params = {"fecha": fecha, "mes": mes}
+
+    # ══════════════════════════════════════════════════════════════════
+    # BLOQUE A · RESÚMENES DIARIOS (5 tablas)
+    # ══════════════════════════════════════════════════════════════════
+
+    # ── D1: resumen_diario_ventas ─────────────────────────────────────
+    await db.execute(text("DELETE FROM bi.resumen_diario_ventas"))
+    await db.execute(
+        text("""
+        WITH ventas AS (
+            SELECT
+                COALESCE(SUM(ingreso), 0)  AS ingreso,
+                COALESCE(SUM(unidades), 0) AS unidades
+            FROM bi.kpi_producto_dia
+            WHERE fecha = :fecha
+        ),
+        pedidos AS (
+            SELECT COALESCE(SUM(num_ventas), 0) AS num_pedidos
+            FROM bi.kpi_venta_hora_dia
+            WHERE fecha = :fecha
+        ),
+        merma AS (
+            SELECT COALESCE(
+                SUM(merma_registrada * precio_real), 0
+            ) AS merma_valor
+            FROM bi.kpi_insumo_dia
+            WHERE fecha = :fecha
+        ),
+        ref_fechas AS (
+            SELECT DISTINCT fecha
+            FROM bi.kpi_producto_dia
+            WHERE fecha < :fecha
+              AND EXTRACT(DOW FROM fecha)
+                  = EXTRACT(DOW FROM :fecha::date)
+            ORDER BY fecha DESC
+            LIMIT 4
+        ),
+        ref_dias AS (
+            SELECT
+                p.fecha,
+                SUM(p.ingreso)  AS ingreso,
+                SUM(p.unidades) AS unidades,
+                CASE WHEN SUM(h.num_ventas) > 0
+                     THEN SUM(p.ingreso) / SUM(h.num_ventas)
+                END AS prom_pedido
+            FROM bi.kpi_producto_dia p
+            JOIN (
+                SELECT fecha, SUM(num_ventas) AS num_ventas
+                FROM bi.kpi_venta_hora_dia
+                GROUP BY fecha
+            ) h ON h.fecha = p.fecha
+            WHERE p.fecha IN (SELECT fecha FROM ref_fechas)
+            GROUP BY p.fecha
+        ),
+        refs AS (
+            SELECT
+                AVG(ingreso)     AS ref_ingreso,
+                AVG(unidades)    AS ref_unidades,
+                AVG(prom_pedido) AS ref_promedio_pedido
+            FROM ref_dias
+        )
+        INSERT INTO bi.resumen_diario_ventas
+            (fecha, ingreso, unidades, num_pedidos,
+             promedio_venta_pedido,
+             ref_ingreso, ref_unidades, ref_promedio_pedido,
+             var_ingreso_pct, var_promedio_pedido_pct,
+             merma_valor, actualizado_a)
         SELECT
-            id_producto,
-            MAX(nombre_producto),
-            SUM(unidades),
-            SUM(margen),
-            CASE WHEN SUM(ingreso) > 0
-                 THEN SUM(margen) / SUM(ingreso) * 100
-            END
-        FROM bi.kpi_producto_dia
-        WHERE fecha >= CURRENT_DATE - INTERVAL '30 days'
-        GROUP BY id_producto;
-        """,
-        # 2. heatmap_hora_dia — last 90 days
-        """
-        DELETE FROM bi.resumen_heatmap_hora_dia;
-        INSERT INTO bi.resumen_heatmap_hora_dia
-            (dia_semana, hora, unidades_prom, ingreso_prom)
+            :fecha,
+            v.ingreso,
+            v.unidades,
+            p.num_pedidos,
+            CASE WHEN p.num_pedidos > 0
+                 THEN v.ingreso / p.num_pedidos
+            END,
+            r.ref_ingreso,
+            r.ref_unidades,
+            r.ref_promedio_pedido,
+            CASE WHEN r.ref_ingreso > 0
+                 THEN (v.ingreso - r.ref_ingreso)
+                      / r.ref_ingreso * 100
+            END,
+            CASE WHEN r.ref_promedio_pedido > 0
+                      AND p.num_pedidos > 0
+                 THEN ((v.ingreso / p.num_pedidos)
+                       - r.ref_promedio_pedido)
+                      / r.ref_promedio_pedido * 100
+            END,
+            m.merma_valor,
+            now()
+        FROM ventas v, pedidos p, merma m, refs r
+    """),
+        params,
+    )
+
+    # ── D2: resumen_diario_top_producto ───────────────────────────────
+    await db.execute(text("DELETE FROM bi.resumen_diario_top_producto"))
+    await db.execute(
+        text("""
+        WITH ranked AS (
+            SELECT
+                id_producto,
+                nombre_producto AS nombre,
+                unidades,
+                ingreso,
+                ROW_NUMBER() OVER (
+                    ORDER BY unidades DESC,
+                             ingreso DESC,
+                             id_producto ASC
+                ) AS posicion
+            FROM bi.kpi_producto_dia
+            WHERE fecha = :fecha
+        )
+        INSERT INTO bi.resumen_diario_top_producto
+            (posicion, id_producto, nombre, unidades, ingreso)
+        SELECT posicion, id_producto, nombre, unidades, ingreso
+        FROM ranked
+        WHERE posicion <= 3
+    """),
+        params,
+    )
+
+    # ── D3: resumen_diario_top_insumo ─────────────────────────────────
+    await db.execute(text("DELETE FROM bi.resumen_diario_top_insumo"))
+    await db.execute(
+        text("""
+        WITH ranked AS (
+            SELECT
+                k.id_insumo,
+                k.nombre_insumo AS nombre,
+                k.consumo_neto * k.precio_real AS valor_consumo,
+                k.consumo_neto AS cantidad,
+                COALESCE(um.nombre, '') AS unidad,
+                k.merma_registrada * k.precio_real AS merma_valor,
+                ROW_NUMBER() OVER (
+                    ORDER BY k.consumo_neto * k.precio_real DESC,
+                             k.consumo_neto DESC,
+                             k.id_insumo ASC
+                ) AS posicion
+            FROM bi.kpi_insumo_dia k
+            LEFT JOIN pos.insumo i
+                ON i.id_insumo = k.id_insumo
+            LEFT JOIN pos.unidad_medida um
+                ON um.id_unidad_medida = i.id_unidad_medida
+            WHERE k.fecha = :fecha
+        )
+        INSERT INTO bi.resumen_diario_top_insumo
+            (posicion, id_insumo, nombre,
+             valor_consumo, cantidad, unidad, merma_valor)
+        SELECT posicion, id_insumo, nombre,
+               valor_consumo, cantidad, unidad, merma_valor
+        FROM ranked
+        WHERE posicion <= 5
+    """),
+        params,
+    )
+
+    # ── D4: resumen_diario_horas ──────────────────────────────────────
+    await db.execute(text("DELETE FROM bi.resumen_diario_horas"))
+    await db.execute(
+        text("""
+        WITH actual AS (
+            SELECT hora, unidades, ingreso
+            FROM bi.kpi_venta_hora_dia
+            WHERE fecha = :fecha
+        ),
+        patron AS (
+            SELECT
+                hora,
+                AVG(unidades) AS patron_unidades,
+                AVG(ingreso)  AS patron_ingreso
+            FROM bi.kpi_venta_hora_dia
+            WHERE fecha < :fecha
+              AND EXTRACT(DOW FROM fecha)
+                  = EXTRACT(DOW FROM :fecha::date)
+              AND fecha >= :fecha - INTERVAL '90 days'
+            GROUP BY hora
+        ),
+        horas AS (
+            SELECT generate_series(0, 23) AS hora
+        )
+        INSERT INTO bi.resumen_diario_horas
+            (hora, unidades, ingreso,
+             patron_unidades, patron_ingreso)
         SELECT
-            dia_semana,
-            hora,
-            AVG(unidades),
-            AVG(ingreso)
-        FROM bi.kpi_venta_hora_dia
-        WHERE fecha >= CURRENT_DATE - INTERVAL '90 days'
-        GROUP BY dia_semana, hora;
-        """,
-        # 3. recomendacion_compra — 28-day consumption rate + live stock
-        """
-        DELETE FROM bi.resumen_recomendacion_compra;
-        INSERT INTO bi.resumen_recomendacion_compra
-            (id_insumo, nombre_insumo, stock_actual, consumo_bruto_diario,
-             punto_pedido, dispara_pedido, cantidad_a_comprar)
+            h.hora,
+            a.unidades,
+            a.ingreso,
+            p.patron_unidades,
+            p.patron_ingreso
+        FROM horas h
+        LEFT JOIN actual a ON a.hora = h.hora
+        LEFT JOIN patron p ON p.hora = h.hora
+    """),
+        params,
+    )
+
+    # ── D5: resumen_recomendacion_compra ──────────────────────────────
+    await db.execute(text("DELETE FROM bi.resumen_recomendacion_compra"))
+    await db.execute(
+        text("""
         WITH ritmo AS (
             SELECT
                 id_insumo,
                 SUM(consumo_bruto) / 28.0 AS consumo_bruto_diario
             FROM bi.kpi_insumo_dia
-            WHERE fecha >= CURRENT_DATE - INTERVAL '28 days'
+            WHERE fecha > :fecha - INTERVAL '28 days'
+              AND fecha <= :fecha
             GROUP BY id_insumo
         )
+        INSERT INTO bi.resumen_recomendacion_compra
+            (id_insumo, nombre_insumo, unidad, stock_actual,
+             consumo_bruto_diario, punto_pedido,
+             dispara_pedido, cantidad_a_comprar)
         SELECT
             i.id_insumo,
             i.nombre,
+            COALESCE(um.nombre, ''),
             COALESCE(st.cantidad, 0),
             COALESCE(r.consumo_bruto_diario, 0),
-            (COALESCE(r.consumo_bruto_diario, 0)
-                * COALESCE(i.dias_anticipacion, 0) + i.stock_minimo),
-            (COALESCE(st.cantidad, 0) <= (
+            COALESCE(r.consumo_bruto_diario, 0)
+                * COALESCE(i.dias_anticipacion, 0)
+                + i.stock_minimo,
+            COALESCE(st.cantidad, 0) <= (
                 COALESCE(r.consumo_bruto_diario, 0)
-                * COALESCE(i.dias_anticipacion, 0) + i.stock_minimo
-            )),
+                * COALESCE(i.dias_anticipacion, 0)
+                + i.stock_minimo
+            ),
             GREATEST(
-                (COALESCE(r.consumo_bruto_diario, 0) * 7) * 1.20
+                COALESCE(r.consumo_bruto_diario, 0) * 7 * 1.20
                     - COALESCE(st.cantidad, 0),
                 0
             )
         FROM pos.insumo i
-        LEFT JOIN pos.stock st ON st.id_insumo = i.id_insumo
-        LEFT JOIN ritmo r      ON r.id_insumo  = i.id_insumo
-        WHERE i.activo = TRUE;
-        """,
-        # 4. senal_precio — margin P25 and volume P50 signals
-        """
-        DELETE FROM bi.resumen_senal_precio;
-        INSERT INTO bi.resumen_senal_precio
-            (id_producto, nombre_producto, unidades, margen_pct, revisar_precio)
+        LEFT JOIN pos.stock st
+            ON st.id_insumo = i.id_insumo
+        LEFT JOIN pos.unidad_medida um
+            ON um.id_unidad_medida = i.id_unidad_medida
+        LEFT JOIN ritmo r
+            ON r.id_insumo = i.id_insumo
+        WHERE i.activo = TRUE
+    """),
+        params,
+    )
+
+    # ══════════════════════════════════════════════════════════════════
+    # BLOQUE B · RESÚMENES MENSUALES (7 tablas)
+    # Solo se reescribe el mes en curso; meses cerrados son inmutables.
+    # ══════════════════════════════════════════════════════════════════
+
+    # ── M1: resumen_mensual_meta ──────────────────────────────────────
+    await db.execute(
+        text("DELETE FROM bi.resumen_mensual_meta WHERE mes = :mes"), params
+    )
+    await db.execute(
+        text("""
+        INSERT INTO bi.resumen_mensual_meta
+            (mes, parcial, dias_con_datos, actualizado_a)
+        SELECT
+            :mes,
+            (:mes = date_trunc('month', CURRENT_DATE)::date),
+            COUNT(DISTINCT fecha),
+            now()
+        FROM bi.kpi_producto_dia
+        WHERE fecha >= :mes
+          AND fecha < :mes + INTERVAL '1 month'
+    """),
+        params,
+    )
+
+    # ── M2: resumen_mensual_ranking ───────────────────────────────────
+    await db.execute(
+        text("DELETE FROM bi.resumen_mensual_ranking WHERE mes = :mes"), params
+    )
+    await db.execute(
+        text("""
+        INSERT INTO bi.resumen_mensual_ranking
+            (mes, id_producto, nombre, unidades, ingreso,
+             ganancia_bruta, margen_pct)
+        SELECT
+            :mes,
+            id_producto,
+            MAX(nombre_producto),
+            SUM(unidades),
+            SUM(ingreso),
+            SUM(margen),
+            CASE WHEN SUM(ingreso) > 0
+                 THEN SUM(margen) / SUM(ingreso) * 100
+            END
+        FROM bi.kpi_producto_dia
+        WHERE fecha >= :mes
+          AND fecha < :mes + INTERVAL '1 month'
+        GROUP BY id_producto
+    """),
+        params,
+    )
+
+    # ── M3: resumen_mensual_heatmap ───────────────────────────────────
+    await db.execute(
+        text("DELETE FROM bi.resumen_mensual_heatmap WHERE mes = :mes"), params
+    )
+    await db.execute(
+        text("""
+        INSERT INTO bi.resumen_mensual_heatmap
+            (mes, dia_semana, hora, unidades_prom, ingreso_prom)
+        SELECT
+            :mes,
+            dia_semana,
+            hora,
+            AVG(unidades),
+            AVG(ingreso)
+        FROM bi.kpi_venta_hora_dia
+        WHERE fecha >= :mes
+          AND fecha < :mes + INTERVAL '1 month'
+        GROUP BY dia_semana, hora
+    """),
+        params,
+    )
+
+    # ── M4: resumen_mensual_senal_precio ──────────────────────────────
+    await db.execute(
+        text("DELETE FROM bi.resumen_mensual_senal_precio WHERE mes = :mes"), params
+    )
+    await db.execute(
+        text("""
         WITH base AS (
             SELECT
                 id_producto,
-                MAX(nombre_producto) AS nombre_producto,
+                MAX(nombre_producto) AS nombre,
                 SUM(unidades)        AS unidades,
                 CASE WHEN SUM(ingreso) > 0
                      THEN SUM(margen) / SUM(ingreso) * 100
                 END AS margen_pct
             FROM bi.kpi_producto_dia
-            WHERE fecha >= CURRENT_DATE - INTERVAL '30 days'
+            WHERE fecha >= :mes
+              AND fecha < :mes + INTERVAL '1 month'
             GROUP BY id_producto
         )
+        INSERT INTO bi.resumen_mensual_senal_precio
+            (mes, id_producto, nombre,
+             unidades, margen_pct, revisar_precio)
         SELECT
+            :mes,
             id_producto,
-            nombre_producto,
+            nombre,
             unidades,
             margen_pct,
             COALESCE(
@@ -468,38 +739,25 @@ async def _paso5_rebuild_resumenes(db: AsyncSession) -> None:
                 ),
                 FALSE
             )
-        FROM base;
-        """,
-        # 5. testeo_producto — products launched in last 60 days
-        """
-        DELETE FROM bi.resumen_testeo_producto;
-        INSERT INTO bi.resumen_testeo_producto
-            (id_producto, fecha, nombre_producto, unidades, margen)
-        SELECT
-            k.id_producto,
-            k.fecha,
-            MAX(k.nombre_producto),
-            SUM(k.unidades),
-            SUM(k.margen)
-        FROM bi.kpi_producto_dia k
-        JOIN pos.producto p ON p.id_producto = k.id_producto
-        WHERE p.fecha_lanzamiento >= CURRENT_DATE - INTERVAL '60 days'
-        GROUP BY k.id_producto, k.fecha;
-        """,
-        # 6. warning_insumo — shared ingredient alert
-        """
-        DELETE FROM bi.resumen_warning_insumo;
-        INSERT INTO bi.resumen_warning_insumo
-            (id_producto, id_insumo, nombre_producto, nombre_insumo,
-             consumo_producto, consumo_total, pct_consumo_del_insumo,
-             margen_pct, num_productos_que_usan, alerta)
-        WITH consumo_30d AS (
+        FROM base
+    """),
+        params,
+    )
+
+    # ── M5: resumen_mensual_warning_insumo ────────────────────────────
+    await db.execute(
+        text("DELETE FROM bi.resumen_mensual_warning_insumo WHERE mes = :mes"), params
+    )
+    await db.execute(
+        text("""
+        WITH consumo_mes AS (
             SELECT
                 id_insumo,
                 id_producto,
                 SUM(consumo) AS consumo_producto
             FROM bi.kpi_consumo_insumo_producto_dia
-            WHERE fecha >= CURRENT_DATE - INTERVAL '30 days'
+            WHERE fecha >= :mes
+              AND fecha < :mes + INTERVAL '1 month'
             GROUP BY id_insumo, id_producto
         ),
         totales AS (
@@ -507,42 +765,158 @@ async def _paso5_rebuild_resumenes(db: AsyncSession) -> None:
                 id_insumo,
                 SUM(consumo_producto)       AS consumo_total,
                 COUNT(DISTINCT id_producto) AS num_productos_que_usan
-            FROM consumo_30d
+            FROM consumo_mes
             GROUP BY id_insumo
+        ),
+        ranking AS (
+            SELECT
+                id_producto,
+                MAX(nombre_producto) AS nombre,
+                CASE WHEN SUM(ingreso) > 0
+                     THEN SUM(margen) / SUM(ingreso) * 100
+                END AS margen_pct
+            FROM bi.kpi_producto_dia
+            WHERE fecha >= :mes
+              AND fecha < :mes + INTERVAL '1 month'
+            GROUP BY id_producto
         ),
         umbral AS (
             SELECT PERCENTILE_CONT(0.25)
                    WITHIN GROUP (ORDER BY margen_pct) AS valor
-            FROM bi.resumen_ranking_producto
+            FROM ranking
             WHERE margen_pct IS NOT NULL
         )
+        INSERT INTO bi.resumen_mensual_warning_insumo
+            (mes, id_producto, id_insumo,
+             nombre_producto, nombre_insumo,
+             consumo_producto, consumo_total,
+             pct_consumo_del_insumo,
+             margen_pct, num_productos_que_usan, alerta)
         SELECT
+            :mes,
             c.id_producto,
             c.id_insumo,
-            r.nombre_producto,
+            r.nombre,
             i.nombre,
             c.consumo_producto,
             t.consumo_total,
-            (c.consumo_producto / NULLIF(t.consumo_total, 0) * 100),
+            c.consumo_producto
+                / NULLIF(t.consumo_total, 0) * 100,
             r.margen_pct,
             t.num_productos_que_usan,
             COALESCE(
                 r.margen_pct <= (SELECT valor FROM umbral)
                 AND t.num_productos_que_usan >= 2
-                AND (c.consumo_producto / NULLIF(t.consumo_total, 0)) >= 0.30,
+                AND (c.consumo_producto
+                     / NULLIF(t.consumo_total, 0)) >= 0.30,
                 FALSE
             )
-        FROM consumo_30d c
-        JOIN totales t                       ON t.id_insumo   = c.id_insumo
-        JOIN bi.resumen_ranking_producto r   ON r.id_producto = c.id_producto
-        JOIN pos.insumo i                    ON i.id_insumo   = c.id_insumo;
-        """,
-    ]
-    for query_block in queries:
-        for statement in query_block.split(";"):
-            clean = statement.strip()
-            if clean:
-                await db.execute(text(clean))
+        FROM consumo_mes c
+        JOIN totales t  ON t.id_insumo = c.id_insumo
+        JOIN ranking r  ON r.id_producto = c.id_producto
+        JOIN pos.insumo i ON i.id_insumo = c.id_insumo
+    """),
+        params,
+    )
+
+    # ── M6: resumen_mensual_insumo (fugas — C3 corregido) ────────────
+    await db.execute(
+        text("DELETE FROM bi.resumen_mensual_insumo WHERE mes = :mes"), params
+    )
+    await db.execute(
+        text("""
+        WITH base AS (
+            SELECT
+                k.id_insumo,
+                MAX(k.nombre_insumo) AS nombre,
+                SUM(k.consumo_neto) AS consumo_neto,
+                SUM(k.merma_registrada) AS merma_registrada,
+                SUM(k.consumo_neto * k.precio_real)
+                    AS valor_consumo,
+                CASE
+                    WHEN SUM(
+                        CASE WHEN k.consumo_neto > 0
+                                  AND k.pct_rendimiento > 0
+                             THEN k.consumo_neto
+                        END
+                    ) > 0
+                    THEN SUM(
+                        CASE WHEN k.consumo_neto > 0
+                                  AND k.pct_rendimiento > 0
+                             THEN k.pct_rendimiento * k.consumo_neto
+                        END
+                    ) / SUM(
+                        CASE WHEN k.consumo_neto > 0
+                                  AND k.pct_rendimiento > 0
+                             THEN k.consumo_neto
+                        END
+                    )
+                    ELSE 1.0
+                END AS pct_teorico
+            FROM bi.kpi_insumo_dia k
+            WHERE k.fecha >= :mes
+              AND k.fecha < :mes + INTERVAL '1 month'
+            GROUP BY k.id_insumo
+        ),
+        calc AS (
+            SELECT
+                b.id_insumo,
+                b.nombre,
+                b.consumo_neto,
+                b.merma_registrada,
+                b.valor_consumo,
+                b.consumo_neto AS cantidad,
+                b.pct_teorico,
+                CASE WHEN b.pct_teorico > 0
+                     THEN b.consumo_neto
+                          * (1.0 / b.pct_teorico - 1.0)
+                     ELSE 0
+                END AS merma_esperada,
+                CASE WHEN (b.consumo_neto
+                           + b.merma_registrada) > 0
+                     THEN b.consumo_neto::numeric
+                          / (b.consumo_neto
+                             + b.merma_registrada)
+                     ELSE 1.0
+                END AS rendimiento_real,
+                CASE WHEN b.consumo_neto > 0
+                     THEN b.valor_consumo / b.consumo_neto
+                     ELSE 0
+                END AS avg_precio
+            FROM base b
+        )
+        INSERT INTO bi.resumen_mensual_insumo
+            (mes, id_insumo, nombre, unidad,
+             consumo_neto, valor_consumo, cantidad,
+             merma_registrada, merma_esperada,
+             pct_rendimiento_teorico, rendimiento_real, brecha,
+             costo_merma, costo_fuga, alerta_fuga)
+        SELECT
+            :mes,
+            c.id_insumo,
+            c.nombre,
+            COALESCE(um.nombre, ''),
+            c.consumo_neto,
+            c.valor_consumo,
+            c.cantidad,
+            c.merma_registrada,
+            c.merma_esperada,
+            c.pct_teorico,
+            c.rendimiento_real,
+            c.pct_teorico - c.rendimiento_real,
+            c.merma_registrada * c.avg_precio,
+            GREATEST(
+                c.merma_registrada - c.merma_esperada, 0
+            ) * c.avg_precio,
+            (c.pct_teorico - c.rendimiento_real) > 0.05
+        FROM calc c
+        LEFT JOIN pos.insumo i
+            ON i.id_insumo = c.id_insumo
+        LEFT JOIN pos.unidad_medida um
+            ON um.id_unidad_medida = i.id_unidad_medida
+    """),
+        params,
+    )
 
 
 async def _paso6_notify_vercel() -> None:
@@ -594,19 +968,19 @@ async def procesar_dia(fecha: date, db: AsyncSession) -> None:
 
     try:
         await _paso1_kpi_producto_dia(db, fecha, v_ini, v_fin)
-        logger.info("Step 1/5 complete: kpi_producto_dia")
+        logger.info("Step 1/6 complete: kpi_producto_dia")
 
         await _paso2_kpi_venta_hora_dia(db, fecha, v_ini, v_fin)
-        logger.info("Step 2/5 complete: kpi_venta_hora_dia")
+        logger.info("Step 2/6 complete: kpi_venta_hora_dia")
 
         await _paso3_kpi_insumo_dia(db, fecha, v_ini, v_fin)
-        logger.info("Step 3/5 complete: kpi_insumo_dia")
+        logger.info("Step 3/6 complete: kpi_insumo_dia")
 
         await _paso4_kpi_consumo_insumo_producto(db, fecha, v_ini, v_fin)
-        logger.info("Step 4/5 complete: kpi_consumo_insumo_producto_dia")
+        logger.info("Step 4/6 complete: kpi_consumo_insumo_producto_dia")
 
-        await _paso5_rebuild_resumenes(db)
-        logger.info("Step 5/5 complete: all summary tables rebuilt")
+        await _paso5_rebuild_resumenes(db, fecha)
+        logger.info("Step 5/6 complete: all summary tables rebuilt")
 
         await db.commit()
         logger.info("BI ETL transaction committed for date %s", fecha)
