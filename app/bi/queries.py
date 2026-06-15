@@ -248,3 +248,62 @@ async def calcular_top_insumos(
         {"desde": desde, "hasta": hasta, "limite": limite},
     )
     return [dict(row) for row in result.mappings().all()]
+
+
+async def calcular_horas(db: AsyncSession, desde: date, hasta: date) -> list[dict]:
+    """Compute the resumen_diario_horas shape for a date range.
+
+    For a single day (desde == hasta), this is D4's exact formula.
+    For a range, unidades/ingreso are SUMMED across all days per hour
+    (the "hourly curve" of the whole range). The patron (90-day
+    same-weekday average) is computed relative to `desde`, same as D1.
+
+    Args:
+        db: Async database session.
+        desde: First day of the range (inclusive).
+        hasta: Last day of the range (inclusive).
+
+    Returns:
+        List of 24 dicts (hours 0-23) with hora, unidades, ingreso,
+        patron_unidades, patron_ingreso — ordered by hora ascending.
+    """
+    result = await db.execute(
+        text("""
+        WITH actual AS (
+            SELECT
+                hora,
+                SUM(unidades) AS unidades,
+                SUM(ingreso)  AS ingreso
+            FROM bi.kpi_venta_hora_dia
+            WHERE fecha BETWEEN :desde AND :hasta
+            GROUP BY hora
+        ),
+        patron AS (
+            SELECT
+                hora,
+                AVG(unidades) AS patron_unidades,
+                AVG(ingreso)  AS patron_ingreso
+            FROM bi.kpi_venta_hora_dia
+            WHERE fecha < :desde
+              AND EXTRACT(DOW FROM fecha)
+                  = EXTRACT(DOW FROM :desde::date)
+              AND fecha >= :desde - INTERVAL '90 days'
+            GROUP BY hora
+        ),
+        horas AS (
+            SELECT generate_series(0, 23) AS hora
+        )
+        SELECT
+            h.hora,
+            a.unidades,
+            a.ingreso,
+            p.patron_unidades,
+            p.patron_ingreso
+        FROM horas h
+        LEFT JOIN actual a ON a.hora = h.hora
+        LEFT JOIN patron p ON p.hora = h.hora
+        ORDER BY h.hora
+    """),
+        {"desde": desde, "hasta": hasta},
+    )
+    return [dict(row) for row in result.mappings().all()]
