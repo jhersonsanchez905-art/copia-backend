@@ -314,3 +314,24 @@ async def get_ejecuciones_etl(
     """
     rows = await repo.get_ejecuciones_etl(db, limit)
     return [EjecucionEtlSchema(**row) for row in rows]
+
+
+async def get_mensual_puntual(
+    db: AsyncSession, mes: date
+) -> DashboardMensualSchema | None:
+    """Return the monthly dashboard for a specific closed month (GET /bi/mensual, §4.2).
+
+    Same as get_dashboard_mensual but without mes_anterior — closed
+    months already have their resumen_mensual_* rows from when the
+    ETL processed them (no on-the-fly calculation needed, per
+    coordination decision).
+
+    Args:
+        db: Async database session.
+        mes: First day of the target month.
+
+    Returns:
+        DashboardMensualSchema without mes_anterior, or None if that
+        month was never processed.
+    """
+    return await get_dashboard_mensual(db, mes, incluir_mes_anterior=False)
