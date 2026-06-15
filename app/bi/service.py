@@ -33,6 +33,7 @@ from app.bi.schemas import (
     PicoHoraSchema,
     ProcesarDiaResponse,
     RangoDiarioSchema,
+    RangoMensualSchema,
     RankingCantidadSchema,
     ReferenciaVentasSchema,
     SenalPrecioSchema,
@@ -477,4 +478,80 @@ async def get_mensual_comparar(
             ingreso_pct=_variacion(ingreso_a, ingreso_b),
             unidades_pct=_variacion(unidades_a, unidades_b),
         ),
+    )
+
+
+async def get_mensual_rango(
+    db: AsyncSession, desde: date, hasta: date
+) -> RangoMensualSchema | None:
+    """Aggregate monthly dashboards over a range of months (GET /bi/mensual/rango).
+
+    Reads each month's precomputed resumen_mensual_ranking rows and
+    merges ranking_cantidad/ganancia_bruta by id_producto (summing
+    across months). picos/senales_precio/warnings_insumo/fugas/
+    top_producto/top_insumo are returned empty — these don't have an
+    obvious cross-month aggregation and the Explorar range view does
+    not yet display them (per Darcy, 2026-06-14).
+
+    Args:
+        db: Async database session.
+        desde: First month of the range, first day of month.
+        hasta: Last month of the range, first day of month.
+
+    Returns:
+        RangoMensualSchema with meses_incluidos, or None if no months
+        in the range have data.
+    """
+    meses_data = []
+    cursor = desde
+    while cursor <= hasta:
+        ranking = await repo.get_ranking_mensual(db, cursor)
+        if ranking:
+            meses_data.append((cursor, ranking))
+        cursor = (cursor.replace(day=28) + timedelta(days=4)).replace(day=1)
+
+    if not meses_data:
+        return None
+
+    ranking_merged: dict[int, dict] = {}
+    ganancia_merged: dict[int, dict] = {}
+
+    for _mes, ranking in meses_data:
+        for r in ranking:
+            if r.id_producto not in ranking_merged:
+                ranking_merged[r.id_producto] = {
+                    "id_producto": r.id_producto,
+                    "nombre": r.nombre,
+                    "unidades": 0,
+                    "ingreso": 0,
+                }
+                ganancia_merged[r.id_producto] = {
+                    "id_producto": r.id_producto,
+                    "nombre": r.nombre,
+                    "ganancia_bruta": 0,
+                    "margen_pct": None,
+                    "unidades": 0,
+                }
+            ranking_merged[r.id_producto]["unidades"] += r.unidades or 0
+            ranking_merged[r.id_producto]["ingreso"] += r.ingreso or 0
+            ganancia_merged[r.id_producto]["ganancia_bruta"] += r.ganancia_bruta or 0
+            ganancia_merged[r.id_producto]["unidades"] += r.unidades or 0
+
+    ultimo_mes = meses_data[-1][0]
+
+    return RangoMensualSchema(
+        mes=ultimo_mes.strftime("%Y-%m"),
+        parcial=False,
+        dias_con_datos=None,
+        actualizado_a=datetime.now(tz=BOGOTA_TZ),
+        ranking_cantidad=[RankingCantidadSchema(**v) for v in ranking_merged.values()],
+        ganancia_bruta=[GananciaBrutaSchema(**v) for v in ganancia_merged.values()],
+        top_producto=None,
+        top_insumo=None,
+        picos=[],
+        senales_precio=[],
+        warnings_insumo=[],
+        fugas=[],
+        mes_anterior=None,
+        meses_incluidos=len(meses_data),
     )
