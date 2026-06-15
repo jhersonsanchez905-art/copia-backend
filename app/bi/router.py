@@ -1,16 +1,23 @@
-"""BI module router — 7 endpoints for the BI dashboard.
+"""BI module router — endpoints for the BI dashboard (contrato v3, §4).
 
 Endpoints:
-    GET  /api/v1/bi/ranking-productos     — product ranking (last 30 days)
-    GET  /api/v1/bi/heatmap               — hourly sales heatmap (last 90 days)
-    GET  /api/v1/bi/recomendacion-compra  — purchase recommendations
-    GET  /api/v1/bi/senales-precio        — price signal flags
-    GET  /api/v1/bi/testeo-productos      — new product performance series
-    GET  /api/v1/bi/warnings-insumo       — shared ingredient warnings
+    GET  /api/v1/bi/dashboard/diario      — yesterday's analysis + today's
+                                              purchase recommendation
+    GET  /api/v1/bi/dashboard/mensual     — current month (partial) + closed
+                                              previous month
+    GET  /api/v1/bi/meta                  — available date range for the
+                                              front's selectors
+    GET  /api/v1/bi/diario                — historical day (caso B)
+    GET  /api/v1/bi/diario/comparar       — compare two days (caso A)
+    GET  /api/v1/bi/diario/rango          — aggregated date range (caso C)
+    GET  /api/v1/bi/mensual               — closed month (caso B)
+    GET  /api/v1/bi/mensual/comparar      — compare two months (caso A)
+    GET  /api/v1/bi/mensual/rango         — aggregated month range (caso C)
     POST /api/v1/bi/procesar-dia          — trigger ETL (CRON_SECRET protected)
+    GET  /api/v1/bi/admin/etl/ejecuciones — ETL run history (admin panel)
 
-All GET endpoints read from bi.resumen_* tables (pre-computed by ETL).
-No heavy computation happens at request time.
+All GET endpoints require require_rol("administrador") — BI data
+(margins, real costs, stock levels) is restricted to admin users.
 
 Author: Jherson Sanchez
 Issue: BI-001
@@ -22,27 +29,33 @@ Issue: BI-001
 """
 
 import logging
+from datetime import date
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bi import service
 from app.bi.schemas import (
-    HeatmapHoraDiaSchema,
+    ComparacionDiariaSchema,
+    ComparacionMensualSchema,
+    DashboardDiarioSchema,
+    DashboardMensualSchema,
+    EjecucionEtlSchema,
+    MetaSchema,
     ProcesarDiaRequest,
     ProcesarDiaResponse,
-    RankingProductoSchema,
-    RecomendacionCompraSchema,
-    SenalPrecioSchema,
-    TesteoProductoSchema,
-    WarningInsumoSchema,
+    RangoDiarioSchema,
+    RangoMensualSchema,
 )
 from app.config import settings
 from app.database import get_db
+from app.dependencies import require_rol
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/bi", tags=["BI — Business Intelligence"])
+
+_require_admin = Depends(require_rol("administrador"))
 
 
 def _verify_cron_secret(x_cron_secret: str = Header(...)) -> None:
@@ -62,136 +75,324 @@ def _verify_cron_secret(x_cron_secret: str = Header(...)) -> None:
 
 
 @router.get(
-    "/ranking-productos",
-    response_model=list[RankingProductoSchema],
-    summary="Product ranking by margin and volume (last 30 days).",
+    "/dashboard/diario",
+    response_model=DashboardDiarioSchema,
+    summary="Daily dashboard: yesterday's analysis + today's purchase recommendation.",
+    dependencies=[_require_admin],
 )
-async def ranking_productos(
+async def dashboard_diario(
     db: AsyncSession = Depends(get_db),
-) -> list[RankingProductoSchema]:
-    """Return all products ranked by margin and sales volume.
+) -> DashboardDiarioSchema:
+    """Return yesterday's sales analysis plus today's purchase recommendations.
 
-    Data is pre-computed by the nightly ETL from the last 30 days
-    of sales. Response is read directly from bi.resumen_ranking_producto.
+    Reads from precomputed bi.resumen_diario_* tables (rebuilt nightly
+    by the ETL). Includes recomendacion_compra (§4.1).
 
     Args:
         db: Async database session injected by FastAPI.
 
     Returns:
-        List of products with units sold, total margin and margin percentage.
+        DashboardDiarioSchema with ventas, merma, tops, hourly curve,
+        and purchase recommendations.
+
+    Raises:
+        HTTPException: 404 if the ETL has never run.
     """
-    return await service.get_ranking_productos(db)
+    result = await service.get_dashboard_diario(db, incluir_recomendacion=True)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No hay datos disponibles. El ETL no ha procesado ningún día aún.",
+        )
+    return result
 
 
 @router.get(
-    "/heatmap",
-    response_model=list[HeatmapHoraDiaSchema],
-    summary="Hourly sales heatmap averaged over the last 90 days.",
+    "/dashboard/mensual",
+    response_model=DashboardMensualSchema,
+    summary="Monthly dashboard: current month (partial) + closed previous month.",
+    dependencies=[_require_admin],
 )
-async def heatmap(
+async def dashboard_mensual(
     db: AsyncSession = Depends(get_db),
-) -> list[HeatmapHoraDiaSchema]:
-    """Return average sales per hour and day of week.
+) -> DashboardMensualSchema:
+    """Return the current month's analysis plus the previous closed month.
 
-    Maximum 168 rows (7 days × 24 hours). Hours are in Colombia
-    local time (America/Bogota, UTC-5, no DST).
+    Reads from precomputed bi.resumen_mensual_* tables. Includes
+    mes_anterior (§4.1).
 
     Args:
         db: Async database session injected by FastAPI.
 
     Returns:
-        List of hourly averages grouped by day of week and hour.
+        DashboardMensualSchema with ranking, ganancia bruta, heatmap,
+        signals, warnings, fugas, and the previous month.
+
+    Raises:
+        HTTPException: 404 if the current month has never been processed.
     """
-    return await service.get_heatmap(db)
+    mes_actual = date.today().replace(day=1)
+    result = await service.get_dashboard_mensual(
+        db, mes_actual, incluir_mes_anterior=True
+    )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No hay datos disponibles para el mes actual.",
+        )
+    return result
 
 
 @router.get(
-    "/recomendacion-compra",
-    response_model=list[RecomendacionCompraSchema],
-    summary="Purchase recommendations for active ingredients.",
+    "/meta",
+    response_model=MetaSchema,
+    summary="Available date range for the front's date-range selectors.",
+    dependencies=[_require_admin],
 )
-async def recomendacion_compra(
-    db: AsyncSession = Depends(get_db),
-) -> list[RecomendacionCompraSchema]:
-    """Return purchase recommendations based on consumption rate and stock.
+async def meta(db: AsyncSession = Depends(get_db)) -> MetaSchema:
+    """Return the earliest and most recent dates with processed data.
 
-    Formula: punto_pedido = daily_rate * dias_anticipacion + stock_minimo.
-    Order quantity covers 7 days with a 20% buffer minus current stock.
+    Used by the front to bound date-range selectors in Explorar.
 
     Args:
         db: Async database session injected by FastAPI.
 
     Returns:
-        List of ingredients with stock, consumption rate and order quantity.
+        MetaSchema with historico_desde and ultimo_dia_procesado.
     """
-    return await service.get_recomendacion_compra(db)
+    return await service.get_meta(db)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Explorar — Diario (§4.2)
+# ═══════════════════════════════════════════════════════════════════
 
 
 @router.get(
-    "/senales-precio",
-    response_model=list[SenalPrecioSchema],
-    summary="Price signals: low margin products with high sales volume.",
+    "/diario",
+    response_model=DashboardDiarioSchema,
+    summary="Historical daily analysis for a specific date (caso B).",
+    dependencies=[_require_admin],
 )
-async def senales_precio(
-    db: AsyncSession = Depends(get_db),
-) -> list[SenalPrecioSchema]:
-    """Return products flagged for price review.
+async def diario_puntual(
+    fecha: date, db: AsyncSession = Depends(get_db)
+) -> DashboardDiarioSchema:
+    """Compute the daily dashboard for a historical date, on the fly.
 
-    A product is flagged when its margin is at or below the 25th
-    percentile AND its volume is at or above the 50th percentile
-    across all products in the last 30 days.
+    Omits recomendacion_compra (not applicable to past dates, §2.3).
 
     Args:
+        fecha: The historical date to analyze (query param).
         db: Async database session injected by FastAPI.
 
     Returns:
-        List of products with margin percentage and revisar_precio flag.
+        DashboardDiarioSchema without recomendacion_compra.
+
+    Raises:
+        HTTPException: 404 if no ETL data exists for this date.
     """
-    return await service.get_senales_precio(db)
+    result = await service.get_diario_puntual(db, fecha)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No hay datos procesados para la fecha {fecha}.",
+        )
+    return result
 
 
 @router.get(
-    "/testeo-productos",
-    response_model=list[TesteoProductoSchema],
-    summary="Daily performance series for products launched in the last 60 days.",
+    "/diario/comparar",
+    response_model=ComparacionDiariaSchema,
+    summary="Compare two daily dashboards (caso A).",
+    dependencies=[_require_admin],
 )
-async def testeo_productos(
-    db: AsyncSession = Depends(get_db),
-) -> list[TesteoProductoSchema]:
-    """Return daily sales and margin for recently launched products.
-
-    Only includes products where pos.producto.fecha_lanzamiento
-    is within the last 60 days. Returns one row per product per day.
+async def diario_comparar(
+    a: date, b: date, db: AsyncSession = Depends(get_db)
+) -> ComparacionDiariaSchema:
+    """Compare the daily dashboards of two dates.
 
     Args:
+        a: First date (baseline, query param).
+        b: Second date (query param).
         db: Async database session injected by FastAPI.
 
     Returns:
-        List of daily performance records for new products.
+        ComparacionDiariaSchema with both dashboards + variation.
+
+    Raises:
+        HTTPException: 422 if a == b. 404 if either date has no data.
     """
-    return await service.get_testeo_productos(db)
+    if a == b:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Las fechas a y b deben ser diferentes.",
+        )
+    result = await service.get_diario_comparar(db, a, b)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Una o ambas fechas no tienen datos procesados.",
+        )
+    return result
 
 
 @router.get(
-    "/warnings-insumo",
-    response_model=list[WarningInsumoSchema],
-    summary="Shared ingredient warnings for low-margin products.",
+    "/diario/rango",
+    response_model=RangoDiarioSchema,
+    summary="Aggregated daily dashboard over a date range (caso C).",
+    dependencies=[_require_admin],
 )
-async def warnings_insumo(
-    db: AsyncSession = Depends(get_db),
-) -> list[WarningInsumoSchema]:
-    """Return ingredient sharing warnings for products with low margins.
-
-    An alert fires when a product has margin at or below P25 AND
-    consumes 30% or more of an ingredient shared by 2+ products.
+async def diario_rango(
+    desde: date, hasta: date, db: AsyncSession = Depends(get_db)
+) -> RangoDiarioSchema:
+    """Aggregate the daily dashboard over [desde, hasta].
 
     Args:
+        desde: First day of the range (inclusive, query param).
+        hasta: Last day of the range (inclusive, query param).
         db: Async database session injected by FastAPI.
 
     Returns:
-        List of product-ingredient pairs with alert flag.
+        RangoDiarioSchema with dias_incluidos.
+
+    Raises:
+        HTTPException: 422 if desde > hasta. 404 if no data in range.
     """
-    return await service.get_warnings_insumo(db)
+    if desde > hasta:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="desde debe ser menor o igual a hasta.",
+        )
+    result = await service.get_diario_rango(db, desde, hasta)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No hay datos procesados en el rango indicado.",
+        )
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Explorar — Mensual (§4.2)
+# ═══════════════════════════════════════════════════════════════════
+
+
+@router.get(
+    "/mensual",
+    response_model=DashboardMensualSchema,
+    summary="Monthly dashboard for a specific closed month (caso B).",
+    dependencies=[_require_admin],
+)
+async def mensual_puntual(
+    mes: date, db: AsyncSession = Depends(get_db)
+) -> DashboardMensualSchema:
+    """Return the monthly dashboard for a specific month.
+
+    Reads from precomputed bi.resumen_mensual_* tables.
+    Does not include mes_anterior (§4.2).
+
+    Args:
+        mes: First day of the target month (query param, e.g. 2026-05-01).
+        db: Async database session injected by FastAPI.
+
+    Returns:
+        DashboardMensualSchema without mes_anterior.
+
+    Raises:
+        HTTPException: 404 if that month was never processed.
+    """
+    result = await service.get_mensual_puntual(db, mes.replace(day=1))
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No hay datos procesados para el mes {mes.strftime('%Y-%m')}.",
+        )
+    return result
+
+
+@router.get(
+    "/mensual/comparar",
+    response_model=ComparacionMensualSchema,
+    summary="Compare two monthly dashboards (caso A).",
+    dependencies=[_require_admin],
+)
+async def mensual_comparar(
+    a: date, b: date, db: AsyncSession = Depends(get_db)
+) -> ComparacionMensualSchema:
+    """Compare the monthly dashboards of two months.
+
+    Args:
+        a: First month (baseline, query param, e.g. 2026-04-01).
+        b: Second month (query param, e.g. 2026-05-01).
+        db: Async database session injected by FastAPI.
+
+    Returns:
+        ComparacionMensualSchema with both dashboards + variation.
+
+    Raises:
+        HTTPException: 422 if a == b. 404 if either month has no data.
+    """
+    mes_a = a.replace(day=1)
+    mes_b = b.replace(day=1)
+    if mes_a == mes_b:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Los meses a y b deben ser diferentes.",
+        )
+    result = await service.get_mensual_comparar(db, mes_a, mes_b)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Uno o ambos meses no tienen datos procesados.",
+        )
+    return result
+
+
+@router.get(
+    "/mensual/rango",
+    response_model=RangoMensualSchema,
+    summary="Aggregated monthly dashboard over a range of months (caso C).",
+    dependencies=[_require_admin],
+)
+async def mensual_rango(
+    desde: date, hasta: date, db: AsyncSession = Depends(get_db)
+) -> RangoMensualSchema:
+    """Aggregate ranking and ganancia bruta over a range of months.
+
+    senales_precio, warnings_insumo and fugas are returned empty for
+    ranges — they don't aggregate meaningfully across months (§4.2,
+    per coordination with Darcy 2026-06-15).
+
+    Args:
+        desde: First month of the range (query param, e.g. 2026-03-01).
+        hasta: Last month of the range (query param, e.g. 2026-06-01).
+        db: Async database session injected by FastAPI.
+
+    Returns:
+        RangoMensualSchema with meses_incluidos.
+
+    Raises:
+        HTTPException: 422 if desde > hasta. 404 if no months have data.
+    """
+    mes_desde = desde.replace(day=1)
+    mes_hasta = hasta.replace(day=1)
+    if mes_desde > mes_hasta:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="desde debe ser menor o igual a hasta.",
+        )
+    result = await service.get_mensual_rango(db, mes_desde, mes_hasta)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No hay datos procesados en el rango de meses indicado.",
+        )
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Operación (§4.4)
+# ═══════════════════════════════════════════════════════════════════
 
 
 @router.post(
@@ -207,17 +408,46 @@ async def procesar_dia(
 ) -> ProcesarDiaResponse:
     """Run the full BI ETL pipeline for the specified date.
 
-    Protected by X-Cron-Secret header. Intended to be called by
-    an external cron job at 07:00 UTC (02:00 am Colombia).
+    Protected by X-Cron-Secret header — not accessible via Clerk auth.
+    Intended to be called by an external cron job (02:00 COT / 07:00 UTC)
+    and by the 03:00 retrigger safety call.
 
     Defaults to yesterday in Colombia local time if no date is provided.
-    Safe to call multiple times for the same date (idempotent upserts).
+    Idempotent: safe to call multiple times for the same date.
 
     Args:
         body: Optional request body with a fecha field.
         db: Async database session injected by FastAPI.
 
     Returns:
-        ProcesarDiaResponse with ok flag, processed date and duration in ms.
+        ProcesarDiaResponse with ok, id_ejecucion, fecha_procesada,
+        and status.
     """
-    return await service.procesar_dia(body.fecha, db)
+    return await service.procesar_dia(body.fecha, db, origen="cron")
+
+
+@router.get(
+    "/admin/etl/ejecuciones",
+    response_model=list[EjecucionEtlSchema],
+    summary="Recent ETL run history (admin health panel, §4.4).",
+    dependencies=[_require_admin],
+)
+async def etl_ejecuciones(
+    limit: int = 30,
+    db: AsyncSession = Depends(get_db),
+) -> list[EjecucionEtlSchema]:
+    """Return the most recent ETL run records.
+
+    Used by the admin panel to monitor the health of the nightly ETL.
+    Joins bi.etl_ejecucion with bi.etl_status for human-readable status.
+
+    Args:
+        limit: Maximum number of records to return (default 30, max 100).
+        db: Async database session injected by FastAPI.
+
+    Returns:
+        List of EjecucionEtlSchema ordered by inicio descending.
+    """
+    if limit > 100:
+        limit = 100
+    return await service.get_ejecuciones_etl(db, limit)
