@@ -357,32 +357,20 @@ async def _paso4_kpi_consumo_insumo_producto(
     await db.execute(sql, {"fecha": fecha, "v_ini": v_ini, "v_fin": v_fin})
 
 
-async def _paso5_rebuild_resumenes(
-    db: AsyncSession,
-    fecha: date,
-) -> None:
-    """Rebuild all summary tables (daily + monthly) in a transaction.
+async def _paso5a_resumenes_diarios(db: AsyncSession, fecha: date) -> None:
+    """Rebuild the 5 daily summary tables in a transaction.
 
-    Daily summaries (5): full DELETE + INSERT — singleton snapshot of
-    ``fecha`` (no fecha in PK, rebuilt completely each night).
-
-    Monthly summaries (7): DELETE WHERE mes = :mes + INSERT — only the
-    current month is rewritten; closed months are immutable (§2.3).
+    Full DELETE + INSERT — singleton snapshot of ``fecha`` (no fecha
+    in PK, rebuilt completely each night).
 
     Uses DELETE + INSERT (not TRUNCATE) to stay within the transaction
     boundary. MVCC ensures readers never see empty tables.
 
     Args:
         db: Async database session (transaction managed by caller).
-        fecha: Business day being processed (Colombia local). Defines
-            both the daily snapshot and the month for monthly summaries.
+        fecha: Business day being processed (Colombia local).
     """
-    mes = fecha.replace(day=1)
-    params = {"fecha": fecha, "mes": mes}
-
-    # ══════════════════════════════════════════════════════════════════
-    # BLOQUE A · RESÚMENES DIARIOS (5 tablas)
-    # ══════════════════════════════════════════════════════════════════
+    params = {"fecha": fecha}
 
     # ── D1: resumen_diario_ventas ─────────────────────────────────────
     await db.execute(text("DELETE FROM bi.resumen_diario_ventas"))
@@ -624,10 +612,20 @@ async def _paso5_rebuild_resumenes(
         params,
     )
 
-    # ══════════════════════════════════════════════════════════════════
-    # BLOQUE B · RESÚMENES MENSUALES (7 tablas)
-    # Solo se reescribe el mes en curso; meses cerrados son inmutables.
-    # ══════════════════════════════════════════════════════════════════
+
+async def _paso5b_resumenes_mensuales(db: AsyncSession, fecha: date) -> None:
+    """Rebuild the 7 monthly summary tables in a transaction.
+
+    DELETE WHERE mes = :mes + INSERT — only the current month is
+    rewritten; closed months are immutable (§2.3).
+
+    Args:
+        db: Async database session (transaction managed by caller).
+        fecha: Business day being processed (Colombia local). Defines
+            the month for monthly summaries.
+    """
+    mes = fecha.replace(day=1)
+    params = {"mes": mes}
 
     # ── M1: resumen_mensual_meta ──────────────────────────────────────
     await db.execute(
@@ -944,20 +942,31 @@ async def _paso6_notify_vercel() -> None:
         logger.warning("Vercel cache purge failed (best-effort): %s", exc)
 
 
-async def procesar_dia(fecha: date, db: AsyncSession) -> None:
+async def procesar_dia(fecha: date, db: AsyncSession, origen: str = "cron") -> dict:
     """Run the full BI ETL pipeline for a given business day.
 
     Processes all KPI fact tables and rebuilds all summary tables.
-    All steps run inside a single database transaction. On failure,
-    the transaction is rolled back and the error is re-raised.
+    Each step is audit-logged to bi.etl_ejecucion / bi.audit_etl.
+    On failure, business data is rolled back but the audit trail
+    is preserved (committed in a separate transaction).
 
     Args:
         fecha: The Colombia local date to process (usually yesterday).
         db: Async SQLAlchemy session (transaction managed here).
+        origen: One of 'cron', 'retrigger', 'manual'.
 
-    Raises:
-        Exception: Re-raises any database or processing error after rollback.
+    Returns:
+        A dict with id_ejecucion, fecha_procesada, and status.
     """
+    from app.bi.etl_auditoria import (
+        Status,
+        Step,
+        cerrar_ejecucion,
+        iniciar_ejecucion,
+        paso,
+        registrar_fallo,
+    )
+
     v_ini, v_fin = _ventana_utc(fecha)
     logger.info(
         "Starting BI ETL for date %s (UTC window: %s → %s)",
@@ -966,28 +975,48 @@ async def procesar_dia(fecha: date, db: AsyncSession) -> None:
         v_fin,
     )
 
+    id_ejecucion = await iniciar_ejecucion(db, fecha, origen)
+
     try:
-        await _paso1_kpi_producto_dia(db, fecha, v_ini, v_fin)
-        logger.info("Step 1/6 complete: kpi_producto_dia")
+        async with paso(db, id_ejecucion, Step.KPI_PRODUCTO):
+            await _paso1_kpi_producto_dia(db, fecha, v_ini, v_fin)
 
-        await _paso2_kpi_venta_hora_dia(db, fecha, v_ini, v_fin)
-        logger.info("Step 2/6 complete: kpi_venta_hora_dia")
+        async with paso(db, id_ejecucion, Step.KPI_HORAS):
+            await _paso2_kpi_venta_hora_dia(db, fecha, v_ini, v_fin)
 
-        await _paso3_kpi_insumo_dia(db, fecha, v_ini, v_fin)
-        logger.info("Step 3/6 complete: kpi_insumo_dia")
+        async with paso(db, id_ejecucion, Step.KPI_INSUMO):
+            await _paso3_kpi_insumo_dia(db, fecha, v_ini, v_fin)
 
-        await _paso4_kpi_consumo_insumo_producto(db, fecha, v_ini, v_fin)
-        logger.info("Step 4/6 complete: kpi_consumo_insumo_producto_dia")
+        async with paso(db, id_ejecucion, Step.KPI_CONSUMO):
+            await _paso4_kpi_consumo_insumo_producto(db, fecha, v_ini, v_fin)
 
-        await _paso5_rebuild_resumenes(db, fecha)
-        logger.info("Step 5/6 complete: all summary tables rebuilt")
+        async with paso(db, id_ejecucion, Step.RESUMENES_DIARIOS):
+            await _paso5a_resumenes_diarios(db, fecha)
 
+        async with paso(db, id_ejecucion, Step.RESUMENES_MENSUALES):
+            await _paso5b_resumenes_mensuales(db, fecha)
+
+        await cerrar_ejecucion(db, id_ejecucion, Status.EXITOSO)
         await db.commit()
-        logger.info("BI ETL transaction committed for date %s", fecha)
+        logger.info("BI ETL committed for date %s (ejecucion %s)", fecha, id_ejecucion)
 
     except Exception as exc:
         await db.rollback()
         logger.error("BI ETL failed for date %s: %s", fecha, exc)
+
+        await registrar_fallo(db, id_ejecucion, exc)
+        await db.commit()
+        logger.info("Audit trail committed after failure (ejecucion %s)", id_ejecucion)
+
         raise
 
-    await _paso6_notify_vercel()
+    async with paso(db, id_ejecucion, Step.WEBHOOK_FRONT):
+        await _paso6_notify_vercel()
+    await db.commit()
+
+    return {
+        "ok": True,
+        "id_ejecucion": id_ejecucion,
+        "fecha_procesada": str(fecha),
+        "status": "exitoso",
+    }
